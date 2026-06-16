@@ -1,10 +1,30 @@
+import os
 import psycopg2
 import psycopg2.extras
 from faker import Faker
 import random
 
 # 1. Connect to our Postgres DB
-conn = psycopg2.connect(dbname="samanvaya", user="postgres", password="secret", host="localhost")
+DB_NAME = os.getenv("DB_NAME", "samanvaya")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "secret")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+
+try:
+    conn = psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        host=DB_HOST,
+        port=DB_PORT
+    )
+except psycopg2.OperationalError as exc:
+    raise SystemExit(
+        f"Unable to connect to Postgres at {DB_HOST}:{DB_PORT} as {DB_USER}. "
+        f"Check that the server is running and the credentials are correct.\n{exc}"
+    )
+
 cur = conn.cursor()
 
 # 2. Create the OpenIMIS and SOSYS tables
@@ -28,6 +48,10 @@ CREATE TABLE IF NOT EXISTS sosys_payments (
     status TEXT
 );
 """)
+conn.commit()
+
+# Clear any previous seeded data so the script is idempotent
+cur.execute("TRUNCATE TABLE sosys_payments, openimis_claims;")
 conn.commit()
 
 # 3. Generate Synthetic Data
