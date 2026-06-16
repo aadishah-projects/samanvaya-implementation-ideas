@@ -28,14 +28,17 @@ merged["reconciliation_status"] = merged.apply(
     axis=1
 )
 
-print(
-    merged[
-        [
-            "claim_id",
-            "hospital_name",
-            "amount_claimed",
-            "amount_paid",
-            "reconciliation_status"
-        ]
-    ]
-)
+# print(
+#     merged[
+#         [
+#             "claim_id",
+#             "hospital_name",
+#             "amount_claimed",
+#             "amount_paid",
+#             "reconciliation_status"
+#         ]
+#     ]
+# )
+# Save the results to a new CSV file
+merged.to_csv("reconciled_output.csv", index=False)
+print("✅ Reconciliation complete! Check reconciled_output.csv")
