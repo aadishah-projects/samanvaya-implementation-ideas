@@ -1,15 +1,20 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import pandas as pd
+from sqlalchemy import create_engine
 
 app = FastAPI()
 
-def run_reconciliation():
-    # 1. Load Data
-    claims = pd.read_csv("claims.csv")
-    payments = pd.read_csv("payments.csv")
+# Connect FastAPI to our Postgres Database
+DATABASE_URL = "postgresql://postgres:secret@localhost:5432/samanvaya"
+engine = create_engine(DATABASE_URL)
 
-    # 2. Merge Data
+def run_reconciliation():
+    # 1. Load Data DIRECTLY from Postgres
+    claims = pd.read_sql("SELECT * FROM openimis_claims", engine)
+    payments = pd.read_sql("SELECT * FROM sosys_payments", engine)
+
+    # 2. Merge Data (The Reconciliation Engine)
     merged = claims.merge(payments, on="claim_id", how="left", indicator=True)
 
     # 3. Classify
@@ -24,13 +29,14 @@ def run_reconciliation():
 
     merged["reconciliation_status"] = merged.apply(classify, axis=1)
     
-    # 4. Clean data for JSON (replace NaN with "N/A" so it doesn't break the web app)
+    # 4. Clean data for JSON
     merged = merged.fillna("N/A")
     
-    # 5. Select only the columns we want to show
+    # 5. Select columns (Added 'district' for your future heat map!)
     final_df = merged[[
         "claim_id", 
         "hospital_name", 
+        "district", 
         "amount_claimed", 
         "amount_paid", 
         "reconciliation_status"
@@ -51,30 +57,34 @@ def read_root():
         <head>
             <title>Samanvaya Dashboard</title>
             <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                body { font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; }
+                h1 { color: #333; }
+                table { border-collapse: collapse; width: 100%; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
                 th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                th { background-color: #f2f2f2; }
-                button { padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px;}
-                button:hover { background-color: #0056b3; }
+                th { background-color: #007BFF; color: white; }
+                button { padding: 12px 24px; font-size: 16px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 5px; font-weight: bold;}
+                button:hover { background-color: #218838; }
+                .stats { margin-top: 20px; font-size: 18px; font-weight: bold; }
             </style>
         </head>
         <body>
-            <h1>🇳🇵 Samanvaya Reconciliation Dashboard</h1>
-            <button onclick="loadData()">Run Reconciliation</button>
+            <h1>🇳🇵 Samanvaya: OpenIMIS ↔ SOSYS Reconciliation</h1>
+            <button onclick="loadData()">Run Reconciliation Engine</button>
+            <div id="stats" class="stats"></div>
             
             <table>
                 <thead>
                     <tr>
                         <th>Claim ID</th>
+                        <th>District</th>
                         <th>Hospital</th>
-                        <th>Amount Claimed</th>
-                        <th>Amount Paid</th>
+                        <th>Claimed (NPR)</th>
+                        <th>Paid (NPR)</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody id="data-body">
-                    <tr><td colspan="5" style="text-align:center;">Click the button to load data...</td></tr>
+                    <tr><td colspan="6" style="text-align:center;">Click the button to query the database...</td></tr>
                 </tbody>
             </table>
 
@@ -85,23 +95,34 @@ def read_root():
                     const tbody = document.getElementById('data-body');
                     tbody.innerHTML = '';
                     
+                    let counts = {RECONCILED: 0, MISSING_PAYMENT: 0, AMOUNT_MISMATCH: 0, STATUS_PENDING: 0};
+
                     result.data.forEach(row => {
-                        // Traffic Light Colors
+                        counts[row.reconciliation_status]++;
+                        
                         let color = 'white';
-                        if (row.reconciliation_status === 'RECONCILED') color = '#d4edda'; // Green
-                        else if (row.reconciliation_status === 'STATUS_PENDING') color = '#fff3cd'; // Yellow
-                        else color = '#f8d7da'; // Red
+                        if (row.reconciliation_status === 'RECONCILED') color = '#d4edda'; 
+                        else if (row.reconciliation_status === 'STATUS_PENDING') color = '#fff3cd'; 
+                        else color = '#f8d7da'; 
                         
                         tbody.innerHTML += `
                             <tr style="background-color: ${color};">
                                 <td>${row.claim_id}</td>
+                                <td>${row.district}</td>
                                 <td>${row.hospital_name}</td>
-                                <td>NPR ${row.amount_claimed}</td>
-                                <td>NPR ${row.amount_paid}</td>
+                                <td>${row.amount_claimed}</td>
+                                <td>${row.amount_paid}</td>
                                 <td><strong>${row.reconciliation_status}</strong></td>
                             </tr>
                         `;
                     });
+                    
+                    document.getElementById('stats').innerHTML = `
+                        🟢 Reconciled: ${counts.RECONCILED} | 
+                        🔴 Missing: ${counts.MISSING_PAYMENT} | 
+                        🔴 Mismatch: ${counts.AMOUNT_MISMATCH} | 
+                        🟡 Pending: ${counts.STATUS_PENDING}
+                    `;
                 }
             </script>
         </body>
