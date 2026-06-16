@@ -1,0 +1,5 @@
+claim_id,hospital_name,amount_claimed,status
+C001,Bir Hospital,50000,approved
+C002,Patan Hospital,75000,approved
+C003,Teaching Hospital,30000,approved
+C004,Norvic Hospital,45000,approved
