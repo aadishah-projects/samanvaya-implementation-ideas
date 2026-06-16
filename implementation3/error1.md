@@ -1,0 +1,11 @@
+PS C:\Users\Acer\Downloads\samanvaya\implementation3\openimis-be_py> docker-compose logs -f
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"PSQL_DB_USER\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"PSQL_DB_PASSWORD\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"PSQL_DB_NAME\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"PSQL_DB_USER\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"MSSQL_DB_PASSWORD\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"MSSQL_DB_PASSWORD\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"MSSQL_DB_NAME\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"MSSQL_DB_USER\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="The \"OPENSEARCH_PASSWORD\" variable is not set. Defaulting to a blank string."
+time="2026-06-16T23:42:41+05:45" level=warning msg="C:\\Users\\Acer\\Downloads\\samanvaya\\implementation3\\openimis-be_py\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
