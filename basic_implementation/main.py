@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import pandas as pd
@@ -6,7 +8,15 @@ from sqlalchemy import create_engine
 app = FastAPI()
 
 # Connect FastAPI to our Postgres Database
-DATABASE_URL = "postgresql://postgres:secret@localhost:5432/samanvaya"
+DB_NAME = os.getenv("DB_NAME", "samanvaya")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "secret")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5433")
+
+DATABASE_URL = (
+    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 engine = create_engine(DATABASE_URL)
 
 def run_reconciliation():
