@@ -1,3 +1,13 @@
+Looking at your stack — OpenIMIS (GraphQL) + SOSYS/Mojaloop (REST) + PostgreSQL + FastAPI — and the fact that you're in Kathmandu heading to a hackathon, here's a battle plan to go from mock → real, structured as commands you can hand to another AI *or* follow yourself.
+
+---
+
+## 🗺️ The Real-Data Battle Plan
+
+There are **3 phases**. Pick how deep you want to go based on time.
+
+---
+## ⚡ Phase 1: Real OpenIMIS (Docker, ~30 min)
 **Skip Docker entirely.** There's a live, public OpenIMIS demo server — hosted by the OpenIMIS initiative at `demo.openimis.org` — and the credentials are `Admin` / `admin123`. No installation, no waiting, no Docker.
 
 Here's exactly how to connect to it right now:
@@ -152,19 +162,7 @@ Tell judges: *"This flag switches between the live OpenIMIS demo server and our 
 
 **Try the `curl` command first.** If you get claim data back, you're on the real server in under 5 minutes — no Docker ever needed. What do you get back?
 
-
-Looking at your stack — OpenIMIS (GraphQL) + SOSYS/Mojaloop (REST) + PostgreSQL + FastAPI — and the fact that you're in Kathmandu heading to a hackathon, here's a battle plan to go from mock → real, structured as commands you can hand to another AI *or* follow yourself.
-
----
-
-## 🗺️ The Real-Data Battle Plan
-
-There are **3 phases**. Pick how deep you want to go based on time.
-
----
-
-## ⚡ Phase 1: Real OpenIMIS (Docker, ~30 min)
-
+<!-- 
 This gets a *real* OpenIMIS instance running locally so your GraphQL extractor hits an actual API.
 
 **Give this block to your other AI:**
@@ -223,7 +221,7 @@ curl -X POST http://localhost:8000/api/login/ \
   -d '{"username": "admin", "password": "admin"}'
 ```
 
----
+--- -->
 
 ## 💳 Phase 2: Real Mojaloop (Sandbox, ~20 min)
 

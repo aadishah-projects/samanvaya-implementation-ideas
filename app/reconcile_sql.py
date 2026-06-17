@@ -1,14 +1,9 @@
 import psycopg2
+from config import DB_CONFIG
 
 def run_sql_reconciliation():
     print("Running SQL-based Reconciliation Engine...")
-    conn = psycopg2.connect(
-        dbname="samanvaya",
-        user="postgres",
-        password="secret",
-        host="localhost",
-        port=5433
-    )
+    conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
     cur.execute("TRUNCATE TABLE reconciled_view;")

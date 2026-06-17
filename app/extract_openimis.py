@@ -1,9 +1,7 @@
 import psycopg2
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
-
-OPENIMIS_URL = "http://localhost:8001/api/graphql"
-JWT_TOKEN = "mock_openimis_jwt_secret_12345"
+from config import OPENIMIS_URL, JWT_TOKEN, DB_CONFIG
 
 transport = RequestsHTTPTransport(
     url=OPENIMIS_URL,
@@ -33,7 +31,7 @@ QUERY = gql("""
 """)
 
 def extract_and_load():
-    print("Extracting claims from OpenIMIS GraphQL API...")
+    print(f"Extracting claims from OpenIMIS GraphQL API ({OPENIMIS_URL})...")
     try:
         result = client.execute(QUERY)
     except Exception as e:
@@ -43,13 +41,7 @@ def extract_and_load():
     claims = result['claims']['edges']
     print(f"Fetched {len(claims)} claims. Loading to Postgres...")
 
-    conn = psycopg2.connect(
-        dbname="samanvaya",
-        user="postgres",
-        password="secret",
-        host="localhost",
-        port=5433
-    )
+    conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
     cur.execute("TRUNCATE TABLE staging_openimis_claims;")
