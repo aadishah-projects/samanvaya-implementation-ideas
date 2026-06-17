@@ -1,6 +1,10 @@
 import psycopg2
 import requests
-from config import SOSYS_API_URL, SOSYS_HEADERS, USE_LIVE_API, DB_CONFIG
+
+try:
+    from .config import SOSYS_API_URL, SOSYS_HEADERS, USE_LIVE_API, DB_CONFIG
+except ImportError:
+    from config import SOSYS_API_URL, SOSYS_HEADERS, USE_LIVE_API, DB_CONFIG
 
 def extract_and_load():
     print(f"Extracting payments from SOSYS/Mojaloop API ({SOSYS_API_URL})...")

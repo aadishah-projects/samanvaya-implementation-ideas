@@ -2,7 +2,13 @@ import psycopg2
 import random
 import uuid
 from datetime import date, timedelta
-from config import DB_CONFIG
+
+try:
+    from .config import DB_CONFIG
+except ImportError:
+    from config import DB_CONFIG
+
+random.seed(42)
 
 HOSPITALS = [
     "Bir Hospital", "Patan Hospital", "TUTH",
@@ -40,16 +46,15 @@ def generate_claims(n=50):
 
 def generate_payments(claims):
     payments = []
-    for claim in claims:
-        roll = random.random()
-        if roll < 0.20:
+    for index, claim in enumerate(claims, start=1):
+        if index <= 12:
             continue
         amount_paid = claim["amount_claimed"]
         status = "paid"
-        if roll < 0.36:
+        if 13 <= index <= 21:
             amount_paid = round(claim["amount_claimed"] * random.uniform(0.3, 0.9), 2)
             status = "paid"
-        elif roll < 0.46:
+        elif 22 <= index <= 26:
             amount_paid = claim["amount_claimed"]
             status = "pending"
         payments.append({
@@ -66,6 +71,13 @@ def seed():
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
+    cur.execute("ALTER TABLE staging_openimis_claims ADD COLUMN IF NOT EXISTS district TEXT;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS district TEXT;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS amount_variance NUMERIC;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS payment_status TEXT;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS payment_count INT DEFAULT 0;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS reconciliation_reason TEXT;")
+    cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS risk_level TEXT;")
     cur.execute("TRUNCATE TABLE staging_openimis_claims CASCADE;")
     cur.execute("TRUNCATE TABLE staging_sosys_payments CASCADE;")
     cur.execute("TRUNCATE TABLE reconciled_view;")
@@ -75,9 +87,17 @@ def seed():
 
     for c in claims:
         cur.execute("""
-            INSERT INTO staging_openimis_claims (uuid, code, date_claimed, amount_claimed, hospital_name, status_code)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (c["uuid"], c["code"], c["date_claimed"], c["amount_claimed"], c["hospital_name"], c["status_code"]))
+            INSERT INTO staging_openimis_claims (uuid, code, date_claimed, amount_claimed, hospital_name, district, status_code)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            c["uuid"],
+            c["code"],
+            c["date_claimed"],
+            c["amount_claimed"],
+            c["hospital_name"],
+            c["district"],
+            c["status_code"],
+        ))
 
     for p in payments:
         cur.execute("""

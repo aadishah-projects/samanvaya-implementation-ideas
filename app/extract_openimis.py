@@ -1,7 +1,11 @@
 import psycopg2
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
-from config import OPENIMIS_URL, JWT_TOKEN, DB_CONFIG
+
+try:
+    from .config import OPENIMIS_URL, JWT_TOKEN, DB_CONFIG
+except ImportError:
+    from config import OPENIMIS_URL, JWT_TOKEN, DB_CONFIG
 
 transport = RequestsHTTPTransport(
     url=OPENIMIS_URL,
@@ -44,19 +48,21 @@ def extract_and_load():
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
+    cur.execute("ALTER TABLE staging_openimis_claims ADD COLUMN IF NOT EXISTS district TEXT;")
     cur.execute("TRUNCATE TABLE staging_openimis_claims;")
 
     for edge in claims:
         node = edge['node']
         cur.execute("""
-            INSERT INTO staging_openimis_claims (uuid, code, date_claimed, amount_claimed, hospital_name, status_code)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO staging_openimis_claims (uuid, code, date_claimed, amount_claimed, hospital_name, district, status_code)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             node['uuid'],
             node['code'],
             node['dateClaimed'],
             float(node['claimed']),
             node['healthFacility']['name'] if node['healthFacility'] else 'Unknown',
+            'Unknown',
             node['status']
         ))
 
