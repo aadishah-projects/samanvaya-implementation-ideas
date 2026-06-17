@@ -6,24 +6,20 @@ from sqlalchemy import create_engine
 
 app = FastAPI()
 
-# --- CONFIGURATION ---
-DATABASE_URL = "postgresql://postgres:secret@localhost:5432/samanvaya"
+DATABASE_URL = "postgresql://postgres:secret@localhost:5433/samanvaya"
 engine = create_engine(DATABASE_URL)
 
-# --- 1. FETCH REAL OPENIMIS DATA (FHIR API) ---
 def fetch_openimis_claims():
-    print("🔄 Fetching FHIR data from OpenIMIS...")
+    print("Fetching FHIR data from OpenIMIS...")
     try:
-        # FHIR uses standard REST GET requests
         response = requests.get("http://localhost:8001/fhir/Claim")
         response.raise_for_status()
         data = response.json()
     except Exception as e:
-        print(f"❌ Failed to connect to FHIR server: {e}")
+        print(f"Failed to connect to FHIR server: {e}")
         return pd.DataFrame()
 
     claims_list = []
-    # Parse the FHIR "Bundle" structure
     for entry in data.get("entry", []):
         resource = entry["resource"]
         claims_list.append({
@@ -33,14 +29,12 @@ def fetch_openimis_claims():
             "claim_date": resource["created"],
             "status": "approved"
         })
-        
+
     return pd.DataFrame(claims_list)
 
-# --- 2. FETCH MOCKED SOSYS DATA (Postgres) ---
 def fetch_sosys_payments():
     return pd.read_sql("SELECT * FROM sosys_payments", engine)
 
-# --- 3. THE RECONCILIATION ENGINE ---
 def run_reconciliation():
     claims = fetch_openimis_claims()
     if claims.empty:
@@ -48,10 +42,8 @@ def run_reconciliation():
 
     payments = fetch_sosys_payments()
 
-    # Merge them
     merged = claims.merge(payments, on="claim_id", how="left", indicator=True)
 
-    # Classify
     def classify(row):
         if row["_merge"] == "left_only":
             return "MISSING_PAYMENT"
@@ -63,20 +55,18 @@ def run_reconciliation():
 
     merged["reconciliation_status"] = merged.apply(classify, axis=1)
     merged = merged.fillna("N/A")
-    
+
     final_df = merged[[
-        "claim_id", "hospital_name", "amount_claimed", 
+        "claim_id", "hospital_name", "amount_claimed",
         "amount_paid", "reconciliation_status"
     ]]
-    
+
     return final_df.to_dict(orient="records")
 
-# --- API ENDPOINT ---
 @app.get("/api/reconcile")
 def get_reconciliation():
     return {"data": run_reconciliation()}
 
-# --- WEB DASHBOARD (HTML) ---
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     return """
@@ -98,15 +88,15 @@ def read_root():
             </style>
         </head>
         <body>
-            <h1>🇳🇵 Samanvaya Reconciliation Engine</h1>
+            <h1>Samanvaya Reconciliation Engine</h1>
             <p>
                 <span class="badge badge-fhir">LIVE: OpenIMIS (FHIR API)</span>
                 <span class="badge badge-sosys">MOCKED: SOSYS (PostgreSQL)</span>
             </p>
-            
+
             <button onclick="loadData()">Run Reconciliation</button>
             <div id="stats" class="stats"></div>
-            
+
             <table>
                 <thead>
                     <tr>
@@ -124,22 +114,22 @@ def read_root():
 
             <script>
                 async function loadData() {
-                    document.getElementById('stats').innerHTML = "⏳ Fetching FHIR Bundle from OpenIMIS...";
+                    document.getElementById('stats').innerHTML = "Fetching FHIR Bundle from OpenIMIS...";
                     const response = await fetch('/api/reconcile');
                     const result = await response.json();
                     const tbody = document.getElementById('data-body');
                     tbody.innerHTML = '';
-                    
+
                     let counts = {RECONCILED: 0, MISSING_PAYMENT: 0, AMOUNT_MISMATCH: 0, STATUS_PENDING: 0};
 
                     result.data.forEach(row => {
                         counts[row.reconciliation_status]++;
-                        
+
                         let color = 'white';
-                        if (row.reconciliation_status === 'RECONCILED') color = '#d4edda'; 
-                        else if (row.reconciliation_status === 'STATUS_PENDING') color = '#fff3cd'; 
-                        else color = '#f8d7da'; 
-                        
+                        if (row.reconciliation_status === 'RECONCILED') color = '#d4edda';
+                        else if (row.reconciliation_status === 'STATUS_PENDING') color = '#fff3cd';
+                        else color = '#f8d7da';
+
                         tbody.innerHTML += `
                             <tr style="background-color: ${color};">
                                 <td><strong>${row.claim_id}</strong></td>
@@ -150,13 +140,13 @@ def read_root():
                             </tr>
                         `;
                     });
-                    
+
                     document.getElementById('stats').innerHTML = `
-                        ✅ Total FHIR Claims: ${result.data.length} | 
-                        🟢 Reconciled: ${counts.RECONCILED} | 
-                        🔴 Missing: ${counts.MISSING_PAYMENT} | 
-                        🔴 Mismatch: ${counts.AMOUNT_MISMATCH} | 
-                        🟡 Pending: ${counts.STATUS_PENDING}
+                        Total FHIR Claims: ${result.data.length} |
+                        Reconciled: ${counts.RECONCILED} |
+                        Missing: ${counts.MISSING_PAYMENT} |
+                        Mismatch: ${counts.AMOUNT_MISMATCH} |
+                        Pending: ${counts.STATUS_PENDING}
                     `;
                 }
             </script>
