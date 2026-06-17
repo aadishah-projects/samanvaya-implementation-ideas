@@ -1,0 +1,4 @@
+payment_id,claim_id,amount_paid,status
+P001,C001,50000,paid
+P002,C002,70000,paid
+P003,C003,30000,pending
