@@ -7,6 +7,8 @@ export default function ClaimsQueue() {
   const [selected, setSelected] = useState(new Set());
   const [msg, setMsg] = useState('');
   const [batchTx, setBatchTx] = useState(null);
+  const [amountLimit, setAmountLimit] = useState(100000);
+  const [mockCount, setMockCount] = useState(60);
 
   const load = async () => {
     try {
@@ -53,6 +55,33 @@ export default function ClaimsQueue() {
     } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
   };
 
+  const autoCreateBatches = async () => {
+    try {
+      const limit = Number(amountLimit);
+      if (!limit || limit <= 0) return setMsg('Enter a valid amount limit.');
+      const res = await api.post('/batches/auto', { amount_limit: limit });
+      const overLimit = res.data.over_limit_claims?.length
+        ? ` Over-limit claims isolated: ${res.data.over_limit_claims.join(', ')}.`
+        : '';
+      setMsg(`Auto-created ${res.data.created_count} batches for ${res.data.total_claims} claims (${npr(res.data.total_amount)}).${overLimit}`);
+      setSelected(new Set());
+      await load();
+    } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
+  };
+
+  const generateMockData = async () => {
+    try {
+      const count = Number(mockCount);
+      if (!count || count < 5) return setMsg('Generate at least 5 claims.');
+      setMsg('Generating mock claim data...');
+      const res = await api.post('/demo/mock-data', { claim_count: count, reset: true });
+      setBatchTx(null);
+      setSelected(new Set());
+      setMsg(`Generated ${res.data.claims} claims: ${res.data.approved} approved, ${res.data.processed} historical processed.`);
+      await load();
+    } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
+  };
+
   const executeBatch = async (batchId) => {
     try {
       setMsg('Executing batch...');
@@ -84,6 +113,38 @@ export default function ClaimsQueue() {
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-4">Claims Queue</h1>
       {msg && <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded mb-4 text-sm">{msg}</div>}
+
+      <div className="bg-white rounded-lg shadow mb-6">
+        <div className="px-4 py-3 border-b">
+          <h2 className="font-semibold text-gray-700">Batch Automation</h2>
+        </div>
+        <div className="p-4 grid gap-4 md:grid-cols-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm text-gray-600">
+              Amount limit
+              <input type="number" min="1" step="1000" value={amountLimit}
+                onChange={e => setAmountLimit(e.target.value)}
+                className="block mt-1 border rounded px-3 py-1.5 text-sm w-40" />
+            </label>
+            <button onClick={autoCreateBatches}
+              className="bg-indigo-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-indigo-700">
+              Auto Create Batches
+            </button>
+          </div>
+          <div className="flex flex-wrap items-end gap-3 md:justify-end">
+            <label className="text-sm text-gray-600">
+              Mock claims
+              <input type="number" min="5" max="250" value={mockCount}
+                onChange={e => setMockCount(e.target.value)}
+                className="block mt-1 border rounded px-3 py-1.5 text-sm w-32" />
+            </label>
+            <button onClick={generateMockData}
+              className="bg-slate-700 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-slate-800">
+              Generate Mock Data
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-white rounded-lg shadow mb-6">
         <div className="px-4 py-3 border-b flex items-center justify-between">

@@ -54,6 +54,52 @@ class BulkDisbursementService:
         self.db.refresh(batch)
         return batch
 
+    def create_batches_by_amount_limit(self, amount_limit: float) -> tuple[list[PaymentBatch], list[str]]:
+        """Create payment batches from all approved claims without crossing the limit when possible."""
+        if amount_limit <= 0:
+            raise ValueError("Amount limit must be greater than zero.")
+
+        claims = (
+            self.db.query(Claim)
+            .filter(Claim.status == ClaimStatus.APPROVED.value)
+            .order_by(Claim.approved_date.asc(), Claim.claim_code.asc())
+            .all()
+        )
+        if not claims:
+            raise ValueError("No approved claims are available for automatic batching.")
+
+        created_batches: list[PaymentBatch] = []
+        over_limit_claims: list[str] = []
+        current_group: list[Claim] = []
+        current_total = 0.0
+
+        def flush_group():
+            nonlocal current_group, current_total
+            if not current_group:
+                return
+            batch = self.create_batch([claim.id for claim in current_group])
+            created_batches.append(batch)
+            current_group = []
+            current_total = 0.0
+
+        for claim in claims:
+            amount = float(claim.approved_amount)
+            if amount > amount_limit:
+                flush_group()
+                over_limit_claims.append(claim.claim_code)
+                batch = self.create_batch([claim.id])
+                created_batches.append(batch)
+                continue
+
+            if current_group and current_total + amount > amount_limit:
+                flush_group()
+
+            current_group.append(claim)
+            current_total += amount
+
+        flush_group()
+        return created_batches, over_limit_claims
+
     def execute_batch(self, batch_id: str) -> PaymentBatch:
         """Execute all PENDING transactions in a batch through the gateway."""
         batch = self.db.query(PaymentBatch).filter_by(id=batch_id).first()

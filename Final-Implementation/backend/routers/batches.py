@@ -3,7 +3,13 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import PaymentBatch, PaymentTransaction, Claim
-from schemas import BatchCreateRequest, BatchResponse, TransactionResponse
+from schemas import (
+    BatchAutoCreateRequest,
+    BatchAutoCreateResponse,
+    BatchCreateRequest,
+    BatchResponse,
+    TransactionResponse,
+)
 from services.disbursement import BulkDisbursementService
 from services.gateway.mock_bank import MockBankGateway
 
@@ -17,6 +23,25 @@ def create_batch(req: BatchCreateRequest, db: Session = Depends(get_db)):
     try:
         batch = service.create_batch(req.claim_ids)
         return batch
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/auto", response_model=BatchAutoCreateResponse)
+def create_batches_automatically(req: BatchAutoCreateRequest, db: Session = Depends(get_db)):
+    gateway = MockBankGateway()
+    service = BulkDisbursementService(db, gateway)
+    try:
+        batches, over_limit_claims = service.create_batches_by_amount_limit(req.amount_limit)
+        batch_responses = [BatchResponse.model_validate(batch) for batch in batches]
+        return BatchAutoCreateResponse(
+            created_count=len(batches),
+            total_claims=sum(batch.claim_count for batch in batches),
+            total_amount=sum(batch.total_amount for batch in batches),
+            amount_limit=req.amount_limit,
+            over_limit_claims=over_limit_claims,
+            batches=batch_responses,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

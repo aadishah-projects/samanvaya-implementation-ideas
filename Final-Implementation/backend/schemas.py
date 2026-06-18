@@ -23,6 +23,10 @@ class BatchCreateRequest(BaseModel):
     claim_ids: list[str]
 
 
+class BatchAutoCreateRequest(BaseModel):
+    amount_limit: float = 100000.0
+
+
 class BatchResponse(BaseModel):
     id: str
     created_at: datetime
@@ -32,6 +36,15 @@ class BatchResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BatchAutoCreateResponse(BaseModel):
+    created_count: int
+    total_claims: int
+    total_amount: float
+    amount_limit: float
+    over_limit_claims: list[str]
+    batches: list[BatchResponse]
 
 
 # ── Transactions ───────────────────────────────────────
@@ -97,6 +110,22 @@ class ReconciliationSummaryResponse(BaseModel):
     unmatched: int
     flagged: int
     total: int
+
+
+# Demo data
+class MockDataGenerateRequest(BaseModel):
+    claim_count: int = 60
+    reset: bool = True
+
+
+class MockDataGenerateResponse(BaseModel):
+    ok: bool
+    claims: int
+    approved: int
+    processed: int
+    historical_transactions: int
+    total_approved_amount: float
+    scenario: str
 
 
 # ── Webhook ────────────────────────────────────────────
