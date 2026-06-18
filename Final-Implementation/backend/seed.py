@@ -2,10 +2,11 @@
 import argparse
 import random
 from datetime import datetime, timezone, timedelta
-from database import engine, SessionLocal, Base
+from database import engine, SessionLocal, Base, sync_demo_schema
 from models import (
     BatchStatus,
     Claim,
+    ClaimAuditLog,
     ClaimStatus,
     GatewayConfig,
     PaymentBatch,
@@ -91,8 +92,41 @@ CLAIM_TYPE_PROFILES = [
     ("Referral", 25000, 90000),
 ]
 
+DIAGNOSES = [
+    "Acute gastroenteritis",
+    "Lower respiratory infection",
+    "Hypertension follow-up",
+    "Type 2 diabetes management",
+    "Fracture treatment",
+    "Maternity care",
+    "Renal dialysis",
+    "Appendicitis",
+]
+
+GENDERS = ["Female", "Male", "Female", "Male", "Other"]
+
+EMPLOYERS = [
+    ("National Health Insurance Board", "EMP-SSF-1001"),
+    ("Kathmandu Metropolitan City", "EMP-SSF-1002"),
+    ("Social Security Fund", "EMP-SSF-1003"),
+    ("Provincial Health Directorate", "EMP-SSF-1004"),
+]
+
+BANKS = [
+    ("Rastriya Banijya Bank", "Teku Branch"),
+    ("Nepal Bank Limited", "New Road Branch"),
+    ("Nabil Bank", "Lalitpur Branch"),
+    ("Global IME Bank", "Kathmandu Branch"),
+]
+
+
+def _hospital_code(name: str) -> str:
+    words = [part for part in name.replace("&", " ").split() if part]
+    return "".join(word[0].upper() for word in words[:4]) or "HF"
+
 
 def _clear_demo_data(db):
+    db.query(ClaimAuditLog).delete()
     db.query(SOSYSLegacyLog).delete()
     db.query(PaymentTransaction).delete()
     db.query(PaymentBatch).delete()
@@ -103,6 +137,7 @@ def _clear_demo_data(db):
 
 def seed(reset: bool = False):
     Base.metadata.create_all(bind=engine)
+    sync_demo_schema()
     db = SessionLocal()
 
     if reset:
@@ -124,6 +159,31 @@ def seed(reset: bool = False):
             claim_code=code,
             health_facility=HOSPITALS[hosp_idx],
             insuree_name=INSUREE_NAMES[name_idx],
+            employer=EMPLOYERS[i % len(EMPLOYERS)][0],
+            employer_esaid=EMPLOYERS[i % len(EMPLOYERS)][1],
+            scheme="SSF Health Insurance",
+            ssid=f"SSID-{20240000 + i:08d}",
+            relation="Self",
+            visit_from=(base_date + timedelta(days=i - 3)).strftime("%Y-%m-%d"),
+            visit_to=(base_date + timedelta(days=i - 1)).strftime("%Y-%m-%d"),
+            visit_type="In-patient" if i % 3 == 0 else "Out-patient",
+            claimed_date=(base_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+            claim_administrator="OpenIMIS Claim Officer",
+            issued_by="Samanvaya Demo Desk",
+            is_reclaim=i % 9 == 0,
+            explanation="Reviewed claim prepared for payment execution in Samanvaya.",
+            policy_information="Active SSF health policy. Payment eligible after claim review.",
+            bank_name=BANKS[hosp_idx % len(BANKS)][0],
+            branch_name=BANKS[hosp_idx % len(BANKS)][1],
+            account_name=HOSPITALS[hosp_idx],
+            account_no=f"00{hosp_idx + 1}-SSF-{100000 + i}",
+            review_status="Reviewed",
+            reviewed_by="claim.reviewer",
+            reviewed_at=base_date + timedelta(days=i, hours=2),
+            patient_age=18 + ((i * 7) % 62),
+            patient_gender=GENDERS[i % len(GENDERS)],
+            diagnosis=DIAGNOSES[i % len(DIAGNOSES)],
+            treatment_date=(base_date + timedelta(days=i - 2)).strftime("%Y-%m-%d"),
             claimed_amount=float(claimed),
             approved_amount=float(approved),
             status=status,
@@ -144,6 +204,8 @@ def seed(reset: bool = False):
 
     if processed_claims:
         historical_batch = PaymentBatch(
+            batch_code="BATCH-HIST-0001",
+            health_facility="Multiple Facilities",
             total_amount=sum(c.approved_amount for c in processed_claims),
             claim_count=len(processed_claims),
             status=BatchStatus.DONE.value,
@@ -191,6 +253,7 @@ def seed_mock_data(claim_count: int = 60, reset: bool = True):
     rng = random.Random(20260618 + claim_count)
 
     Base.metadata.create_all(bind=engine)
+    sync_demo_schema()
     db = SessionLocal()
 
     if reset:
@@ -206,13 +269,38 @@ def seed_mock_data(claim_count: int = 60, reset: bool = True):
         approved = float(rng.randrange(min_amount, max_amount, 500))
         claimed = approved + float(rng.randrange(0, 12000, 500))
         status = ClaimStatus.PROCESSED.value if i % 4 == 0 else ClaimStatus.APPROVED.value
-        hospital = MOCK_HOSPITALS[(i + rng.randrange(len(MOCK_HOSPITALS))) % len(MOCK_HOSPITALS)]
+        hospital = MOCK_HOSPITALS[(i // 5) % len(MOCK_HOSPITALS)]
         insuree = MOCK_INSUREE_NAMES[(i + rng.randrange(len(MOCK_INSUREE_NAMES))) % len(MOCK_INSUREE_NAMES)]
 
         claim = Claim(
             claim_code=f"CLM-MOCK-{sequence:04d}",
             health_facility=hospital,
             insuree_name=f"{insuree} ({claim_type})",
+            employer=EMPLOYERS[i % len(EMPLOYERS)][0],
+            employer_esaid=EMPLOYERS[i % len(EMPLOYERS)][1],
+            scheme="SSF Health Insurance",
+            ssid=f"SSID-{20260000 + sequence:08d}",
+            relation="Self" if i % 5 else "Spouse",
+            visit_from=(base_date + timedelta(hours=i * 6 - 72)).strftime("%Y-%m-%d"),
+            visit_to=(base_date + timedelta(hours=i * 6 - 24)).strftime("%Y-%m-%d"),
+            visit_type="Emergency" if claim_type in {"Emergency", "ICU"} else "Out-patient",
+            claimed_date=(base_date + timedelta(hours=i * 6)).strftime("%Y-%m-%d"),
+            claim_administrator="OpenIMIS Claim Officer",
+            issued_by="Samanvaya Demo Desk",
+            is_reclaim=i % 11 == 0,
+            explanation=f"{claim_type} claim reviewed for payment execution.",
+            policy_information="Active policy. No contribution gap detected in demo data.",
+            bank_name=BANKS[i % len(BANKS)][0],
+            branch_name=BANKS[i % len(BANKS)][1],
+            account_name=hospital,
+            account_no=f"00{(i % 9) + 1}-SSF-{200000 + sequence}",
+            review_status="Reviewed",
+            reviewed_by="claim.reviewer",
+            reviewed_at=base_date + timedelta(hours=i * 6 + 1),
+            patient_age=1 + rng.randrange(78),
+            patient_gender=GENDERS[(i + rng.randrange(len(GENDERS))) % len(GENDERS)],
+            diagnosis=DIAGNOSES[(i + rng.randrange(len(DIAGNOSES))) % len(DIAGNOSES)],
+            treatment_date=(base_date + timedelta(hours=i * 6 - 36)).strftime("%Y-%m-%d"),
             claimed_amount=claimed,
             approved_amount=approved,
             status=status,
@@ -232,6 +320,8 @@ def seed_mock_data(claim_count: int = 60, reset: bool = True):
 
     if processed_claims:
         historical_batch = PaymentBatch(
+            batch_code=f"BATCH-{_hospital_code('Historical')}-0001",
+            health_facility="Multiple Facilities",
             total_amount=sum(c.approved_amount for c in processed_claims),
             claim_count=len(processed_claims),
             status=BatchStatus.DONE.value,

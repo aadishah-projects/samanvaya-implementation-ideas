@@ -9,6 +9,14 @@ class ClaimResponse(BaseModel):
     claim_code: str
     health_facility: str
     insuree_name: str
+    employer: Optional[str] = None
+    scheme: Optional[str] = None
+    claimed_date: Optional[str] = None
+    review_status: Optional[str] = None
+    patient_age: Optional[int] = None
+    patient_gender: Optional[str] = None
+    diagnosis: Optional[str] = None
+    treatment_date: Optional[str] = None
     claimed_amount: float
     approved_amount: float
     status: str
@@ -29,6 +37,8 @@ class BatchAutoCreateRequest(BaseModel):
 
 class BatchResponse(BaseModel):
     id: str
+    batch_code: Optional[str] = None
+    health_facility: Optional[str] = None
     created_at: datetime
     total_amount: float
     claim_count: int
@@ -36,6 +46,51 @@ class BatchResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ClaimReviewRequest(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+
+class ClaimBulkReviewRequest(BaseModel):
+    claim_ids: list[str]
+    status: str
+    notes: Optional[str] = None
+
+
+class ClaimReviewListResponse(BaseModel):
+    id: str
+    claim_code: str
+    health_facility: str
+    insuree_name: str
+    claimed_amount: float
+    submitted_date: Optional[str] = None
+    review_status: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ClaimDetailResponse(ClaimResponse):
+    employer_esaid: Optional[str] = None
+    ssid: Optional[str] = None
+    relation: Optional[str] = None
+    visit_from: Optional[str] = None
+    visit_to: Optional[str] = None
+    visit_type: Optional[str] = None
+    claim_administrator: Optional[str] = None
+    issued_by: Optional[str] = None
+    is_reclaim: bool = False
+    explanation: Optional[str] = None
+    policy_information: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    account_name: Optional[str] = None
+    account_no: Optional[str] = None
+    review_notes: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
 
 
 class BatchAutoCreateResponse(BaseModel):
@@ -98,6 +153,7 @@ class ReconciliationResultResponse(BaseModel):
     payment_date: Optional[str] = None
     sosys_status: Optional[str] = None
     match_status: str
+    issue_type: Optional[str] = None
     notes: Optional[str] = None
     resolved: bool
 
@@ -110,6 +166,11 @@ class ReconciliationSummaryResponse(BaseModel):
     unmatched: int
     flagged: int
     total: int
+    ghost_payments: int = 0
+    missing_in_sosys: int = 0
+    amount_mismatches: int = 0
+    duplicates: int = 0
+    status_mismatches: int = 0
 
 
 # Demo data

@@ -47,18 +47,62 @@ class Claim(Base):
     claim_code = Column(String, unique=True, nullable=False)
     health_facility = Column(String, nullable=False)
     insuree_name = Column(String, nullable=False)
+    employer = Column(String, nullable=True)
+    employer_esaid = Column(String, nullable=True)
+    scheme = Column(String, nullable=True)
+    ssid = Column(String, nullable=True)
+    relation = Column(String, nullable=True)
+    visit_from = Column(String, nullable=True)
+    visit_to = Column(String, nullable=True)
+    visit_type = Column(String, nullable=True)
+    claimed_date = Column(String, nullable=True)
+    claim_administrator = Column(String, nullable=True)
+    issued_by = Column(String, nullable=True)
+    is_reclaim = Column(Boolean, default=False)
+    explanation = Column(Text, nullable=True)
+    policy_information = Column(Text, nullable=True)
+    bank_name = Column(String, nullable=True)
+    branch_name = Column(String, nullable=True)
+    account_name = Column(String, nullable=True)
+    account_no = Column(String, nullable=True)
+    review_status = Column(String, default="Reviewed")
+    review_notes = Column(Text, nullable=True)
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    patient_age = Column(Integer, nullable=True)
+    patient_gender = Column(String, nullable=True)
+    diagnosis = Column(String, nullable=True)
+    treatment_date = Column(String, nullable=True)
     claimed_amount = Column(Float, nullable=False)
     approved_amount = Column(Float, nullable=False)
     status = Column(String, default=ClaimStatus.APPROVED.value)
     approved_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     transactions = relationship("PaymentTransaction", back_populates="claim")
+    audit_logs = relationship("ClaimAuditLog", back_populates="claim")
+
+
+class ClaimAuditLog(Base):
+    __tablename__ = "claim_audit_logs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    claim_id = Column(String, ForeignKey("claims.id"), nullable=False)
+    action = Column(String, nullable=False)
+    old_status = Column(String, nullable=True)
+    new_status = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    actor = Column(String, default="demo_user")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    claim = relationship("Claim", back_populates="audit_logs")
 
 
 class PaymentBatch(Base):
     __tablename__ = "payment_batches"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    batch_code = Column(String, unique=True, nullable=True)
+    health_facility = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     total_amount = Column(Float, default=0.0)
     claim_count = Column(Integer, default=0)
@@ -110,5 +154,6 @@ class SOSYSLegacyLog(Base):
     payment_date = Column(String, nullable=True)
     sosys_status = Column(String, nullable=True)
     match_status = Column(String, default=MatchStatus.UNMATCHED.value)
+    issue_type = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     resolved = Column(Boolean, default=False)

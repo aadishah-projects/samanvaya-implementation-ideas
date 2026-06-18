@@ -47,23 +47,26 @@ export default function Dashboard() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Financial Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Financial Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">Live payment health for OpenIMIS claim disbursements.</p>
+        </div>
         <div className="flex items-center gap-2">
           <a href="http://localhost:8001/ui" target="_blank" rel="noreferrer"
-            className="bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800">
+            className="rounded border border-sky-700 bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-800">
             Open Mock Bank
           </a>
           <button onClick={resetDemo}
-            className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-50">
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Reset Demo
           </button>
         </div>
       </div>
 
-      {message && <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded mb-4 text-sm">{message}</div>}
+      {message && <div className="bg-sky-50 border border-sky-200 text-sky-900 px-4 py-2 mb-4 text-sm">{message}</div>}
 
       {anomalyCount > 0 && (
-        <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg mb-6 flex items-center gap-2 animate-pulse">
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 mb-6 flex items-center gap-2">
           <span className="text-lg">&#9888;</span>
           <span className="font-semibold">{anomalyCount} SOSYS Anomalies Detected</span>
         </div>
@@ -77,8 +80,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-sm font-semibold text-gray-600 mb-3">Payment Breakdown</h2>
+        <div className="bg-white border border-slate-200 p-4">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">Payment Breakdown</h2>
           {pieData.length ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -91,8 +94,8 @@ export default function Dashboard() {
           ) : <p className="text-gray-400 text-center py-12">No transactions yet</p>}
         </div>
 
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-sm font-semibold text-gray-600 mb-3">Daily Volume</h2>
+        <div className="bg-white border border-slate-200 p-4">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">Daily Volume</h2>
           {volume.length ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={volume}>
@@ -111,9 +114,9 @@ export default function Dashboard() {
 
 function Card({ label, value, color }) {
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div className="bg-white border border-slate-200 p-4">
       <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">{label}</div>
+      <div className="text-xs text-slate-500 uppercase mt-1">{label}</div>
     </div>
   );
 }

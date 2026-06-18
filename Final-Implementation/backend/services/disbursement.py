@@ -1,4 +1,5 @@
 """Bulk Disbursement Service: the financial heart of Samanvaya."""
+import re
 import uuid
 
 from sqlalchemy.orm import Session
@@ -30,7 +31,14 @@ class BulkDisbursementService:
         if not claims:
             raise ValueError("No approved claims found for the given IDs.")
 
+        hospitals = {claim.health_facility for claim in claims}
+        if len(hospitals) != 1:
+            raise ValueError("A payment batch can contain claims from one hospital only.")
+
+        hospital = claims[0].health_facility
         batch = PaymentBatch(
+            batch_code=self._next_batch_code(hospital),
+            health_facility=hospital,
             total_amount=sum(c.approved_amount for c in claims),
             claim_count=len(claims),
             status=BatchStatus.QUEUED.value,
@@ -55,14 +63,14 @@ class BulkDisbursementService:
         return batch
 
     def create_batches_by_amount_limit(self, amount_limit: float) -> tuple[list[PaymentBatch], list[str]]:
-        """Create payment batches from all approved claims without crossing the limit when possible."""
+        """Create amount-limited batches, grouped by individual hospital."""
         if amount_limit <= 0:
             raise ValueError("Amount limit must be greater than zero.")
 
         claims = (
             self.db.query(Claim)
             .filter(Claim.status == ClaimStatus.APPROVED.value)
-            .order_by(Claim.approved_date.asc(), Claim.claim_code.asc())
+            .order_by(Claim.health_facility.asc(), Claim.approved_date.asc(), Claim.claim_code.asc())
             .all()
         )
         if not claims:
@@ -70,34 +78,40 @@ class BulkDisbursementService:
 
         created_batches: list[PaymentBatch] = []
         over_limit_claims: list[str] = []
-        current_group: list[Claim] = []
-        current_total = 0.0
 
-        def flush_group():
-            nonlocal current_group, current_total
-            if not current_group:
-                return
-            batch = self.create_batch([claim.id for claim in current_group])
-            created_batches.append(batch)
-            current_group = []
+        claims_by_hospital: dict[str, list[Claim]] = {}
+        for claim in claims:
+            claims_by_hospital.setdefault(claim.health_facility, []).append(claim)
+
+        for hospital in sorted(claims_by_hospital):
+            current_group: list[Claim] = []
             current_total = 0.0
 
-        for claim in claims:
-            amount = float(claim.approved_amount)
-            if amount > amount_limit:
-                flush_group()
-                over_limit_claims.append(claim.claim_code)
-                batch = self.create_batch([claim.id])
+            def flush_group():
+                nonlocal current_group, current_total
+                if not current_group:
+                    return
+                batch = self.create_batch([claim.id for claim in current_group])
                 created_batches.append(batch)
-                continue
+                current_group = []
+                current_total = 0.0
 
-            if current_group and current_total + amount > amount_limit:
-                flush_group()
+            for claim in claims_by_hospital[hospital]:
+                amount = float(claim.approved_amount)
+                if amount > amount_limit:
+                    flush_group()
+                    over_limit_claims.append(claim.claim_code)
+                    created_batches.append(self.create_batch([claim.id]))
+                    continue
 
-            current_group.append(claim)
-            current_total += amount
+                if current_group and current_total + amount > amount_limit:
+                    flush_group()
 
-        flush_group()
+                current_group.append(claim)
+                current_total += amount
+
+            flush_group()
+
         return created_batches, over_limit_claims
 
     def execute_batch(self, batch_id: str) -> PaymentBatch:
@@ -167,3 +181,20 @@ class BulkDisbursementService:
     def _update_batch_status(self, batch_id: str):
         """Recompute batch status from its transactions."""
         update_batch_status(self.db, batch_id)
+
+    def _next_batch_code(self, hospital: str) -> str:
+        hospital_code = _hospital_code(hospital)
+        existing_count = (
+            self.db.query(PaymentBatch)
+            .filter(PaymentBatch.batch_code.like(f"BATCH-{hospital_code}-%"))
+            .count()
+        )
+        return f"BATCH-{hospital_code}-{existing_count + 1:04d}"
+
+
+def _hospital_code(name: str) -> str:
+    tokens = re.findall(r"[A-Za-z0-9]+", name or "")
+    if not tokens:
+        return "HF"
+    code = "".join(token[0].upper() for token in tokens[:4])
+    return code[:8] or "HF"

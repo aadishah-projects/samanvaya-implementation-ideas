@@ -1,1 +1,73 @@
 @import "tailwindcss";
+
+:root {
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  color: #424242;
+  background: #eeeeee;
+}
+
+body {
+  margin: 0;
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+.openimis-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.openimis-button.primary {
+  background: #1976D2;
+  color: #ffffff;
+}
+
+.openimis-button.secondary {
+  border: 1px solid #1976D2;
+  background: #ffffff;
+  color: #1976D2;
+}
+
+.openimis-button.warn {
+  background: #FF9800;
+  color: #ffffff;
+}
+
+.openimis-button.text-only {
+  background: transparent;
+  color: #1976D2;
+}
+
+.openimis-button:disabled {
+  opacity: 0.45;
+}

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import engine, Base
+from database import engine, Base, sync_demo_schema
 from routers import claims, batches, transactions, webhooks, dashboard, reconciliation, demo
 from services.poller import start_poller, stop_poller
 
@@ -12,6 +12,7 @@ from services.poller import start_poller, stop_poller
 async def lifespan(app: FastAPI):
     # Startup
     Base.metadata.create_all(bind=engine)
+    sync_demo_schema()
     start_poller()
     yield
     # Shutdown

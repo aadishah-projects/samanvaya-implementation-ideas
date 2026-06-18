@@ -60,6 +60,21 @@ def generate_and_run_demo(scenario: str = "mixed", db: Session = Depends(get_db)
     }
 
 
+@router.post("/run", response_model=ReconciliationSummaryResponse)
+def run_reconciliation(db: Session = Depends(get_db)):
+    """Re-run comparison against the currently loaded SOSYS rows."""
+    return ReconciliationSummaryResponse(**recon_service.reconcile(db))
+
+
+@router.get("/sosys-ledger", response_model=list[ReconciliationResultResponse])
+def get_sosys_ledger(db: Session = Depends(get_db)):
+    return (
+        db.query(SOSYSLegacyLog)
+        .order_by(SOSYSLegacyLog.payment_date.desc(), SOSYSLegacyLog.claim_code.asc())
+        .all()
+    )
+
+
 @router.get("/results", response_model=list[ReconciliationResultResponse])
 def get_results(db: Session = Depends(get_db)):
     return db.query(SOSYSLegacyLog).order_by(SOSYSLegacyLog.claim_code).all()
@@ -67,13 +82,7 @@ def get_results(db: Session = Depends(get_db)):
 
 @router.get("/summary", response_model=ReconciliationSummaryResponse)
 def get_summary(db: Session = Depends(get_db)):
-    matched = db.query(SOSYSLegacyLog).filter_by(match_status="MATCHED").count()
-    unmatched = db.query(SOSYSLegacyLog).filter_by(match_status="UNMATCHED").count()
-    flagged = db.query(SOSYSLegacyLog).filter_by(match_status="FLAGGED").count()
-    total = db.query(SOSYSLegacyLog).count()
-    return ReconciliationSummaryResponse(
-        matched=matched, unmatched=unmatched, flagged=flagged, total=total
-    )
+    return ReconciliationSummaryResponse(**recon_service.build_summary(db))
 
 
 @router.post("/{log_id}/resolve")

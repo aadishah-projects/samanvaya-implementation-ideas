@@ -1,14 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api/client';
 
 export default function Reconciliation() {
   const [results, setResults] = useState([]);
   const [summary, setSummary] = useState(null);
   const [tab, setTab] = useState('ALL');
-  const [uploading, setUploading] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [scenario, setScenario] = useState('mixed');
-  const fileRef = useRef();
+  const [message, setMessage] = useState('');
 
   const load = async () => {
     try {
@@ -18,163 +15,178 @@ export default function Reconciliation() {
       ]);
       setResults(r.data);
       setSummary(s.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const upload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    setMsg('');
+  useEffect(() => {
+    load();
+  }, []);
+
+  const runComparison = async () => {
+    setMessage('Running ledger comparison...');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await api.post('/reconciliation/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setMsg(`Uploaded ${res.data.uploaded} rows. Matched: ${res.data.reconciliation.matched}, Flagged: ${res.data.reconciliation.flagged}, Unmatched: ${res.data.reconciliation.unmatched}`);
+      const res = await api.post('/reconciliation/run');
+      setSummary(res.data);
+      setMessage('Comparison refreshed.');
       await load();
-    } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
-    setUploading(false);
-  };
-
-  const downloadGeneratedCsv = async () => {
-    try {
-      const res = await api.get('/reconciliation/generate-csv', {
-        params: { scenario },
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `sosys_${scenario}_export.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      setMsg('Generated SOSYS CSV downloaded.');
-    } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
-  };
-
-  const runGeneratedReconciliation = async () => {
-    setUploading(true);
-    setMsg('Generating SOSYS data and running reconciliation...');
-    try {
-      const res = await api.post('/reconciliation/generate-demo', null, { params: { scenario } });
-      const summary = res.data.reconciliation;
-      setMsg(`Generated ${res.data.generated} SOSYS rows. Matched: ${summary.matched}, Flagged: ${summary.flagged}, Unmatched: ${summary.unmatched}`);
-      await load();
-    } catch (e) { setMsg('Error: ' + (e.response?.data?.detail || e.message)); }
-    setUploading(false);
+    } catch (e) {
+      setMessage('Comparison failed: ' + (e.response?.data?.detail || e.message));
+    }
   };
 
   const resolve = async (id) => {
     try {
       await api.post(`/reconciliation/${id}/resolve`);
-      load();
-    } catch (e) { console.error(e); }
+      await load();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const filtered = results.filter(r => tab === 'ALL' || r.match_status === tab);
-  const badge = (s) => {
-    const c = { MATCHED: 'bg-green-100 text-green-800', UNMATCHED: 'bg-orange-100 text-orange-800', FLAGGED: 'bg-red-100 text-red-800' };
-    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c[s] || 'bg-gray-100'}`}>{s}</span>;
-  };
-  const npr = (v) => 'NPR ' + Number(v).toLocaleString('en-IN');
-
-  useEffect(() => { load(); }, []);
+  const filtered = results.filter((r) => tab === 'ALL' || r.match_status === tab || r.issue_type === tab);
+  const npr = (v) => 'NPR ' + Number(v || 0).toLocaleString('en-IN');
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">Reconciliation Console</h1>
-
-      <div className="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap items-center gap-3">
-        <label className="bg-slate-700 text-white px-4 py-2 rounded text-sm font-medium cursor-pointer hover:bg-slate-800">
-          {uploading ? 'Uploading...' : 'Upload SOSYS CSV'}
-          <input ref={fileRef} type="file" accept=".csv" onChange={upload} className="hidden" />
-        </label>
-        <select value={scenario} onChange={e => setScenario(e.target.value)}
-          className="border rounded px-3 py-2 text-sm bg-white">
-          <option value="mixed">Mixed Anomalies</option>
-          <option value="clean">Clean Export</option>
-        </select>
-        <button onClick={downloadGeneratedCsv}
-          className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50">
-          Generate SOSYS CSV
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Reconciliation Console</h1>
+          <p className="mt-1 text-sm text-slate-500">Comparing Samanvaya Ledger vs. Legacy SOSYS/Bank Ledger.</p>
+        </div>
+        <button
+          onClick={runComparison}
+          className="rounded border border-sky-700 bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-800"
+        >
+          Refresh Comparison
         </button>
-        <button onClick={runGeneratedReconciliation} disabled={uploading}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-          Run Generated Reconciliation
-        </button>
-        {msg && <span className="text-sm text-gray-600">{msg}</span>}
       </div>
 
+      {message && <div className="mb-4 border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">{message}</div>}
+
       {summary && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-3 text-center">
-            <div className="text-xl font-bold text-gray-800">{summary.total}</div>
-            <div className="text-xs text-gray-500">Total</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-3 text-center">
-            <div className="text-xl font-bold text-green-600">{summary.matched}</div>
-            <div className="text-xs text-gray-500">Matched</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-3 text-center">
-            <div className="text-xl font-bold text-orange-600">{summary.unmatched}</div>
-            <div className="text-xs text-gray-500">Unmatched</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-3 text-center">
-            <div className="text-xl font-bold text-red-600">{summary.flagged}</div>
-            <div className="text-xs text-gray-500">Flagged</div>
-          </div>
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Insight label="Matched" value={summary.matched} tone="emerald" note="Perfect match" />
+          <Insight label="Ghost Payments" value={summary.ghost_payments} tone="red" note="In SOSYS only" />
+          <Insight label="Missing in SOSYS" value={summary.missing_in_sosys} tone="amber" note="Samanvaya success only" />
+          <Insight label="Amount Mismatches" value={summary.amount_mismatches} tone="orange" note="Amounts differ" />
+          <Insight label="Duplicates" value={summary.duplicates} tone="rose" note="Repeated legacy rows" />
         </div>
       )}
 
-      {results.length > 0 && (
-        <>
-          <div className="flex gap-2 mb-4">
-            {['ALL', 'MATCHED', 'UNMATCHED', 'FLAGGED'].map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-1.5 rounded text-sm font-medium ${tab === t ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                {t}
-              </button>
-            ))}
-          </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          ['ALL', 'All'],
+          ['MATCHED', 'Matched'],
+          ['UNMATCHED', 'Unmatched'],
+          ['FLAGGED', 'Flagged'],
+          ['GHOST_PAYMENT', 'Ghost'],
+          ['MISSING_IN_SOSYS', 'Missing'],
+          ['AMOUNT_MISMATCH', 'Mismatch'],
+          ['DUPLICATE', 'Duplicate'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setTab(value)}
+            className={`rounded border px-3 py-1.5 text-sm font-medium ${
+              tab === value
+                ? 'border-sky-700 bg-sky-700 text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          <div className="bg-white rounded-lg shadow overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-3 py-2 text-left">Claim Code</th>
-                  <th className="px-3 py-2 text-left">Hospital</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2 text-center">Match</th>
-                  <th className="px-3 py-2 text-left">Notes</th>
-                  <th className="px-3 py-2 text-center">Action</th>
+      <section className="border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-800">Line-by-Line Comparison ({filtered.length})</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-left">Claim Code</th>
+                <th className="px-3 py-2 text-left">Hospital</th>
+                <th className="px-3 py-2 text-right">Legacy Amount</th>
+                <th className="px-3 py-2 text-center">Flag</th>
+                <th className="px-3 py-2 text-left">Insight</th>
+                <th className="px-3 py-2 text-left">Notes</th>
+                <th className="px-3 py-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => (
+                <tr key={r.id} className={`border-t border-slate-100 ${rowTone(r)}`}>
+                  <td className="px-3 py-2 font-mono text-xs">{r.claim_code}</td>
+                  <td className="px-3 py-2">{r.health_facility}</td>
+                  <td className="px-3 py-2 text-right">{npr(r.amount)}</td>
+                  <td className="px-3 py-2 text-center">{badge(r.match_status)}</td>
+                  <td className="px-3 py-2 text-xs font-semibold text-slate-700">{formatIssue(r.issue_type)}</td>
+                  <td className="max-w-md px-3 py-2 text-xs text-slate-600">{r.notes || '-'}</td>
+                  <td className="px-3 py-2 text-center">
+                    {r.match_status !== 'MATCHED' && !r.resolved && (
+                      <button
+                        onClick={() => resolve(r.id)}
+                        className="rounded border border-sky-700 bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-800"
+                      >
+                        Resolve
+                      </button>
+                    )}
+                    {r.resolved && <span className="text-xs font-semibold text-emerald-700">Resolved</span>}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map(r => (
-                  <tr key={r.id} className={`border-t ${r.match_status === 'FLAGGED' ? 'bg-red-50' : r.match_status === 'UNMATCHED' ? 'bg-orange-50' : ''}`}>
-                    <td className="px-3 py-2 font-mono text-xs">{r.claim_code}</td>
-                    <td className="px-3 py-2">{r.health_facility}</td>
-                    <td className="px-3 py-2 text-right">{npr(r.amount)}</td>
-                    <td className="px-3 py-2 text-center">{badge(r.match_status)}</td>
-                    <td className="px-3 py-2 text-xs text-gray-600 max-w-xs">{r.notes || '-'}</td>
-                    <td className="px-3 py-2 text-center">
-                      {r.match_status !== 'MATCHED' && !r.resolved && (
-                        <button onClick={() => resolve(r.id)}
-                          className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs hover:bg-blue-700">
-                          Resolve
-                        </button>
-                      )}
-                      {r.resolved && <span className="text-green-600 text-xs font-semibold">Resolved</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+              ))}
+              {!filtered.length && (
+                <tr>
+                  <td colSpan="7" className="py-8 text-center text-slate-400">No comparison rows yet. Load SOSYS data first.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
+}
+
+function Insight({ label, value, note, tone }) {
+  const tones = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    red: 'border-red-200 bg-red-50 text-red-800',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    orange: 'border-orange-200 bg-orange-50 text-orange-800',
+    rose: 'border-rose-200 bg-rose-50 text-rose-800',
+  };
+  return (
+    <div className={`border p-4 ${tones[tone] || tones.emerald}`}>
+      <div className="text-2xl font-semibold">{value}</div>
+      <div className="mt-1 text-sm font-semibold">{label}</div>
+      <div className="mt-1 text-xs opacity-80">{note}</div>
+    </div>
+  );
+}
+
+function badge(status) {
+  const colors = {
+    MATCHED: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    UNMATCHED: 'border-amber-200 bg-amber-50 text-amber-800',
+    FLAGGED: 'border-red-200 bg-red-50 text-red-800',
+  };
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${colors[status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>{status}</span>;
+}
+
+function formatIssue(issue) {
+  if (!issue) return '-';
+  return issue.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function rowTone(row) {
+  if (row.match_status === 'MATCHED') return '';
+  if (row.issue_type === 'GHOST_PAYMENT') return 'bg-red-50/70';
+  if (row.issue_type === 'MISSING_IN_SOSYS') return 'bg-amber-50/70';
+  if (row.issue_type === 'DUPLICATE') return 'bg-rose-50/70';
+  return 'bg-orange-50/70';
 }

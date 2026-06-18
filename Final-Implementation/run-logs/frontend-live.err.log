@@ -1,0 +1,7 @@
+[2m11:30:08 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/transactions[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1139:18)
+    at afterConnectMultiple (node:net:1712:7)
+[2m11:30:08 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAxiosError: Request failed with status code 502
+    at settle (http://localhost:5173/node_modules/.vite/deps/axios.js?v=efee4eeb:1829:14)
+    at XMLHttpRequest.onloadend (http://localhost:5173/node_modules/.vite/deps/axios.js?v=efee4eeb:2213:4)

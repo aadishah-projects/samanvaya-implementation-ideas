@@ -85,24 +85,27 @@ export default function TransactionLedger() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl font-bold text-gray-800">Transaction Ledger</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Transaction Ledger</h1>
+          <p className="mt-1 text-sm text-slate-500">Auditable Samanvaya payment attempts, gateway references, and retry state.</p>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={exportCsv}
-            className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-50">
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Export CSV
           </button>
           <button onClick={clearLedger}
-            className="bg-red-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-red-700">
+            className="rounded border border-red-700 bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800">
             Clear Ledger
           </button>
         </div>
       </div>
 
-      {message && <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded mb-4 text-sm">{message}</div>}
+      {message && <div className="bg-sky-50 border border-sky-200 text-sky-900 px-4 py-2 mb-4 text-sm">{message}</div>}
 
       <div className="flex gap-3 mb-4">
         <select value={filter} onChange={e => setFilter(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm bg-white">
+          className="border border-slate-300 px-3 py-1.5 text-sm bg-white">
           <option value="">All Statuses</option>
           <option value="SUCCESS">Success</option>
           <option value="FAILED">Failed</option>
@@ -110,12 +113,12 @@ export default function TransactionLedger() {
           <option value="PENDING">Pending</option>
         </select>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hospital..."
-          className="border rounded px-3 py-1.5 text-sm flex-1" />
+          className="border border-slate-300 px-3 py-1.5 text-sm flex-1" />
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
+      <div className="bg-white border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="px-3 py-2 text-left">Claim</th>
               <th className="px-3 py-2 text-left">Hospital</th>
