@@ -6,6 +6,7 @@ export default function TransactionLedger() {
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -40,6 +41,41 @@ export default function TransactionLedger() {
     } catch (e) { alert('Error: ' + (e.response?.data?.detail || e.message)); }
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await api.get('/transactions/export-csv', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'samanvaya_ledger_export.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setMessage('Ledger CSV exported.');
+    } catch (e) {
+      setMessage('Export failed: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
+  const clearLedger = async () => {
+    const ok = window.confirm(
+      'Clear the full payment ledger, batches, and reconciliation rows? Affected claims will return to APPROVED for a fresh demo.'
+    );
+    if (!ok) return;
+
+    try {
+      const res = await api.delete('/transactions/ledger');
+      setDetail(null);
+      setMessage(
+        `Cleared ${res.data.deleted_transactions} transactions, ${res.data.deleted_batches} batches, and reset ${res.data.reset_claims} claims.`
+      );
+      await load();
+    } catch (e) {
+      setMessage('Clear failed: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
   const npr = (v) => 'NPR ' + Number(v).toLocaleString('en-IN');
   const badge = (s) => {
     const c = { SUCCESS: 'bg-green-100 text-green-800', FAILED: 'bg-red-100 text-red-800', PENDING: 'bg-amber-100 text-amber-800', PROCESSING: 'bg-blue-100 text-blue-800', PARTIAL: 'bg-orange-100 text-orange-800' };
@@ -48,7 +84,21 @@ export default function TransactionLedger() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">Transaction Ledger</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h1 className="text-2xl font-bold text-gray-800">Transaction Ledger</h1>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCsv}
+            className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-50">
+            Export CSV
+          </button>
+          <button onClick={clearLedger}
+            className="bg-red-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-red-700">
+            Clear Ledger
+          </button>
+        </div>
+      </div>
+
+      {message && <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded mb-4 text-sm">{message}</div>}
 
       <div className="flex gap-3 mb-4">
         <select value={filter} onChange={e => setFilter(e.target.value)}

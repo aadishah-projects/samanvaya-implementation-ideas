@@ -49,6 +49,8 @@ The project has **3 complete systems** inside `Final-Implementation/`:
 - Select claims → Create batch → Execute → Mock Bank receives payouts
 - Approve/Reject in Mock Bank UI → webhook fires → dashboard updates live
 - Transaction Ledger with status badges, raw JSON logs, retry button
+- Transaction Ledger export to CSV for finance/audit evidence
+- Transaction Ledger clear button for repeatable hackathon demos
 - Reconciliation Console: upload SOSYS CSV → auto-matching → anomaly flagging
 - Financial Dashboard: KPI cards, pie chart, bar chart, anomaly alerts
 
@@ -157,6 +159,7 @@ openimis-fe-samanvaya/src/
 | Transaction Ledger UI | Done | Standalone (Tailwind) + OpenIMIS module (Material-UI) |
 | Financial Dashboard (KPIs + charts) | Done | Pie + bar charts, anomaly alerts, auto-refresh |
 | Reconciliation UI | Done | Upload CSV, tabbed results, resolve buttons |
+| Ledger maintenance controls | Done | CSV export + clear ledger/reset affected claims for repeatable demos |
 
 ### Phase 6: Hackathon Demo & Polish
 
@@ -192,6 +195,15 @@ openimis-fe-samanvaya/src/
 ---
 
 ## 5. What Remains
+
+### Latest Improvement Pass
+
+| Change | Why It Matters |
+|---|---|
+| Added `GET /api/transactions/export-csv` | Lets finance officers export the audit ledger before cleanup or demo handoff. |
+| Added `DELETE /api/transactions/ledger` | Clears transactions, batches, and stale reconciliation rows while resetting affected claims to `APPROVED`. |
+| Added Ledger page `Export CSV` and `Clear Ledger` buttons | Solves the growing-ledger issue and makes repeated hackathon rehearsals cleaner. |
+| Documented ledger cleanup as demo-only | Keeps the pitch honest: production should use archive/retention controls instead of hard delete. |
 
 ### High Priority (Critical for Demo)
 

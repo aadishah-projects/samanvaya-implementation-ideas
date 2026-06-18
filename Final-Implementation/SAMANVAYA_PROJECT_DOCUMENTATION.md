@@ -49,6 +49,8 @@ It supports:
 - Batch execution through a mock bank gateway
 - Webhook status updates
 - Transaction ledger with raw request and response logs
+- Ledger CSV export for audit and finance handoff
+- Ledger clear/reset control for repeated hackathon demos
 - Failed payment retry
 - Manual verification of processing transactions
 - Financial dashboard with KPIs and charts
@@ -277,9 +279,15 @@ Example automatic batch request:
 - `GET /api/transactions`
 - `GET /api/transactions?status=FAILED`
 - `GET /api/transactions?health_facility=Bir`
+- `GET /api/transactions/export-csv`
+- `DELETE /api/transactions/ledger`
 - `GET /api/transactions/{tx_id}`
 - `POST /api/transactions/{tx_id}/retry`
 - `POST /api/transactions/{tx_id}/verify`
+
+`GET /api/transactions/export-csv` downloads the current ledger as a CSV with transaction ID, batch ID, claim code, facility, amount, status, gateway reference, retry count, and timestamps.
+
+`DELETE /api/transactions/ledger` clears transactions, batches, and stale reconciliation rows, then resets affected claims back to `APPROVED` so the same demo dataset can be reused.
 
 ### Dashboard
 
@@ -361,6 +369,8 @@ Use this page to inspect individual payments.
 
 Key controls:
 
+- Export ledger CSV
+- Clear ledger
 - Filter by status
 - Search hospital
 - Open transaction detail
@@ -414,6 +424,8 @@ To stop:
 9. Approve one payment and reject another.
 10. Return to Samanvaya and show the dashboard and ledger updating.
 11. Retry a failed transaction from the ledger.
+12. Export the ledger CSV as finance evidence.
+13. Clear the ledger if you need to repeat the same demo cleanly.
 
 What this proves:
 
@@ -524,6 +536,7 @@ Samanvaya lets OpenIMIS enroll, approve, pay, reconcile, and report from one sys
 
 - The standalone demo uses SQLite.
 - The mock bank is a simulator, not a real eSewa or ConnectIPS integration.
+- The ledger clear button is a hackathon/demo maintenance control. In production, ledger deletion should be replaced with archive, retention, and role-based approval rules.
 - Webhook HMAC verification is documented as a production requirement but not enforced in the standalone demo.
 - Full OpenIMIS Docker deployment still needs heavier environment testing.
 - Production encryption and role-based audit history should be completed before real financial use.
