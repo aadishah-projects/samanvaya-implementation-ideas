@@ -1,0 +1,52 @@
+{
+    "modules": [
+        {
+            "name": "samanvaya",
+            "pip": "./openimis-be-samanvaya"
+        },
+        {
+            "name": "core",
+            "pip": "git+https://github.com/openimis/openimis-be-core_py.git@develop#egg=openimis-be-core"
+        },
+        {
+            "name": "claim",
+            "pip": "git+https://github.com/openimis/openimis-be-claim_py.git@develop#egg=openimis-be-claim"
+        },
+        {
+            "name": "claim_batch",
+            "pip": "git+https://github.com/openimis/openimis-be-claim_batch_py.git@develop#egg=openimis-be-claim_batch"
+        },
+        {
+            "name": "payment",
+            "pip": "git+https://github.com/openimis/openimis-be-payment_py.git@develop#egg=openimis-be-payment"
+        },
+        {
+            "name": "payment_cycle",
+            "pip": "git+https://github.com/openimis/openimis-be-payment_cycle_py.git@develop#egg=openimis-be-payment_cycle"
+        },
+        {
+            "name": "location",
+            "pip": "git+https://github.com/openimis/openimis-be-location_py.git@develop#egg=openimis-be-location"
+        },
+        {
+            "name": "insuree",
+            "pip": "git+https://github.com/openimis/openimis-be-insuree_py.git@develop#egg=openimis-be-insuree"
+        },
+        {
+            "name": "medical",
+            "pip": "git+https://github.com/openimis/openimis-be-medical_py.git@develop#egg=openimis-be-medical"
+        },
+        {
+            "name": "policy",
+            "pip": "git+https://github.com/openimis/openimis-be-policy_py.git@develop#egg=openimis-be-policy"
+        },
+        {
+            "name": "report",
+            "pip": "git+https://github.com/openimis/openimis-be-report_py.git@develop#egg=openimis-be-report"
+        },
+        {
+            "name": "tools",
+            "pip": "git+https://github.com/openimis/openimis-be-tools_py.git@develop#egg=openimis-be-tools"
+        }
+    ]
+}

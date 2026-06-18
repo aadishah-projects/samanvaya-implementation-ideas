@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Bank Control Panel — Samanvaya</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 24px;
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+        .status-bar {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .payout-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .payout-card:hover { border-color: #475569; }
+        .payout-card .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .payout-card .recipient { font-weight: 700; font-size: 16px; }
+        .payout-card .amount { font-size: 18px; font-weight: 800; color: #38bdf8; }
+        .payout-card .ref { font-size: 11px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .payout-card .actions { display: flex; gap: 8px; margin-top: 12px; }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-pending { background: #854d0e; color: #fde68a; }
+        .badge-success { background: #166534; color: #bbf7d0; }
+        .badge-failed { background: #991b1b; color: #fecaca; }
+        button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.85; }
+        button:active { opacity: 0.7; }
+        .btn-approve { background: #16a34a; color: white; }
+        .btn-reject { background: #dc2626; color: white; }
+        .btn-silent { background: #d97706; color: white; }
+        .event-note { color: #94a3b8; font-size: 12px; margin-top: 8px; }
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+            font-size: 15px;
+        }
+        .empty .icon { font-size: 40px; margin-bottom: 12px; }
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 24px 0 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mock Bank Control Panel</h1>
+        <p class="subtitle">Simulates payment gateway for Samanvaya demo. Approve or reject payouts to fire webhooks.</p>
+
+        <div class="status-bar" id="status-bar">Loading payouts...</div>
+
+        <div class="section-title">Pending Payouts</div>
+        <div id="pending-queue"></div>
+
+        <div class="section-title">Processed</div>
+        <div id="processed-list"></div>
+    </div>
+
+    <script>
+        const API = '';
+
+        async function loadAll() {
+            try {
+                const [pendingRes, allRes] = await Promise.all([
+                    fetch(`${API}/pending`),
+                    fetch(`${API}/all`),
+                ]);
+                const pending = await pendingRes.json();
+                const all = await allRes.json();
+                const processed = all.filter(p => p.status !== 'PENDING');
+
+                document.getElementById('status-bar').textContent =
+                    `${pending.length} pending | ${processed.length} processed | ${all.length} total`;
+
+                renderPending(pending);
+                renderProcessed(processed);
+            } catch (e) {
+                document.getElementById('status-bar').textContent = 'Error loading payouts: ' + e.message;
+            }
+        }
+
+        function renderPending(items) {
+            const el = document.getElementById('pending-queue');
+            if (!items.length) {
+                el.innerHTML = '<div class="empty"><div class="icon">&#9749;</div>No pending payouts. Execute a batch in Samanvaya to see them here.</div>';
+                return;
+            }
+            el.innerHTML = items.map(item => `
+                <div class="payout-card">
+                    <div class="top">
+                        <div>
+                            <div class="recipient">${esc(item.recipient)}</div>
+                            <div class="ref">${esc(item.ref_id)}</div>
+                        </div>
+                        <div class="amount">NPR ${Number(item.amount).toLocaleString('en-IN')}</div>
+                    </div>
+                    <span class="badge badge-pending">Pending</span>
+                    <div class="actions">
+                        <button class="btn-approve" onclick="approve('${esc(item.ref_id)}')">Approve</button>
+                        <button class="btn-reject" onclick="reject('${esc(item.ref_id)}')">Reject</button>
+                        <button class="btn-silent" onclick="settleSilent('${esc(item.ref_id)}')">Settle Silently</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderProcessed(items) {
+            const el = document.getElementById('processed-list');
+            if (!items.length) {
+                el.innerHTML = '<div class="empty"><div class="icon">&#10003;</div>No processed payouts yet.</div>';
+                return;
+            }
+            el.innerHTML = items.map(item => `
+                <div class="payout-card">
+                    <div class="top">
+                        <div>
+                            <div class="recipient">${esc(item.recipient)}</div>
+                            <div class="ref">${esc(item.ref_id)}</div>
+                        </div>
+                        <div class="amount">NPR ${Number(item.amount).toLocaleString('en-IN')}</div>
+                    </div>
+                    <span class="badge ${item.status === 'SUCCESS' ? 'badge-success' : 'badge-failed'}">${esc(item.status)}</span>
+                    ${item.last_event ? `<div class="event-note">${esc(item.last_event)}</div>` : ''}
+                    ${item.webhook_error ? `<div class="event-note">Webhook error: ${esc(item.webhook_error)}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function approve(refId) {
+            await fetch(`${API}/approve/${refId}`, { method: 'POST' });
+            loadAll();
+        }
+
+        async function reject(refId) {
+            await fetch(`${API}/reject/${refId}`, { method: 'POST' });
+            loadAll();
+        }
+
+        async function settleSilent(refId) {
+            await fetch(`${API}/settle-silent/${refId}`, { method: 'POST' });
+            loadAll();
+        }
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        loadAll();
+        setInterval(loadAll, 3000);
+    </script>
+</body>
+</html>

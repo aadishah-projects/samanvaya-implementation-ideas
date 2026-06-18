@@ -1,0 +1,21 @@
+{
+    "samanvaya": "Samanvaya",
+    "samanvaya.dashboard": "Financial Dashboard",
+    "samanvaya.claims": "Claims Queue",
+    "samanvaya.ledger": "Transaction Ledger",
+    "samanvaya.reconciliation": "Reconciliation",
+    "samanvaya.totalDisbursed": "Total Disbursed",
+    "samanvaya.successRate": "Success Rate",
+    "samanvaya.pending": "Pending",
+    "samanvaya.failed": "Failed",
+    "samanvaya.executePayment": "Execute Payment",
+    "samanvaya.retryTransaction": "Retry Transaction",
+    "samanvaya.uploadSOSYS": "Upload SOSYS CSV",
+    "samanvaya.resolveAnomaly": "Resolve Anomaly",
+    "samanvaya.paymentStatus": "Payment Status",
+    "samanvaya.anomalyAlert": "SOSYS Anomalies Detected",
+    "samanvaya.claimApproved": "Claim Approved",
+    "samanvaya.queued": "Queued in Samanvaya",
+    "samanvaya.sentToBank": "Sent to Bank",
+    "samanvaya.confirmed": "Confirmed"
+}

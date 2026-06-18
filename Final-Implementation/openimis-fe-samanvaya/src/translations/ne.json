@@ -1,0 +1,21 @@
+{
+    "samanvaya": "समन्वय",
+    "samanvaya.dashboard": "वित्तीय ड्यासबोर्ड",
+    "samanvaya.claims": "दावी कतार",
+    "samanvaya.ledger": "कारोबार खाता",
+    "samanvaya.reconciliation": "मिलान",
+    "samanvaya.totalDisbursed": "कुल वितरण",
+    "samanvaya.successRate": "सफलता दर",
+    "samanvaya.pending": "विचाराधीन",
+    "samanvaya.failed": "असफल",
+    "samanvaya.executePayment": "भुक्तानी कार्यान्वयन",
+    "samanvaya.retryTransaction": "पुन: प्रयास",
+    "samanvaya.uploadSOSYS": "SOSYS CSV अपलोड",
+    "samanvaya.resolveAnomaly": "विसंगति समाधान",
+    "samanvaya.paymentStatus": "भुक्तानी स्थिति",
+    "samanvaya.anomalyAlert": "SOSYS विसंगति पत्ता लाग्यो",
+    "samanvaya.claimApproved": "दावी स्वीकृत",
+    "samanvaya.queued": "समन्वयमा कतारबद्ध",
+    "samanvaya.sentToBank": "बैंकमा पठाइयो",
+    "samanvaya.confirmed": "पुष्टि भयो"
+}

@@ -16,7 +16,6 @@ def run_sql_reconciliation():
     cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS payment_count INT DEFAULT 0;")
     cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS reconciliation_reason TEXT;")
     cur.execute("ALTER TABLE reconciled_view ADD COLUMN IF NOT EXISTS risk_level TEXT;")
-    cur.execute("TRUNCATE TABLE reconciled_view;")
 
     sql_query = """
     WITH payment_rollup AS (
@@ -79,7 +78,19 @@ def run_sql_reconciliation():
         CURRENT_TIMESTAMP AS updated_at
     FROM staging_openimis_claims o
     LEFT JOIN payment_rollup s
-        ON o.code = s.claim_code;
+        ON o.code = s.claim_code
+    ON CONFLICT (claim_code) DO UPDATE SET
+        hospital_name = EXCLUDED.hospital_name,
+        district = EXCLUDED.district,
+        amount_claimed = EXCLUDED.amount_claimed,
+        amount_paid = EXCLUDED.amount_paid,
+        amount_variance = EXCLUDED.amount_variance,
+        payment_status = EXCLUDED.payment_status,
+        payment_count = EXCLUDED.payment_count,
+        reconciliation_status = EXCLUDED.reconciliation_status,
+        reconciliation_reason = EXCLUDED.reconciliation_reason,
+        risk_level = EXCLUDED.risk_level,
+        updated_at = CURRENT_TIMESTAMP;
     """
 
     cur.execute(sql_query)

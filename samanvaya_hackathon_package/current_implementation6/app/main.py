@@ -57,31 +57,68 @@ def ensure_pipeline_runs_table():
         """))
 
 
-def run_reconciliation():
-    query = """
+RECONCILE_SQL = """
+    WITH payment_rollup AS (
         SELECT
             claim_code,
-            hospital_name,
-            COALESCE(district, 'Unknown') AS district,
-            amount_claimed,
-            amount_paid,
-            COALESCE(amount_variance, amount_claimed - amount_paid) AS amount_variance,
-            COALESCE(payment_status, 'unknown') AS payment_status,
-            COALESCE(payment_count, 0) AS payment_count,
-            reconciliation_status,
-            COALESCE(reconciliation_reason, 'No reason recorded.') AS reconciliation_reason,
-            COALESCE(risk_level, 'LOW') AS risk_level,
-            updated_at
-        FROM reconciled_view
-        ORDER BY
-            CASE COALESCE(risk_level, 'LOW')
-                WHEN 'HIGH' THEN 1
-                WHEN 'MEDIUM' THEN 2
-                ELSE 3
-            END,
-            claim_code;
-    """
-    df = pd.read_sql(query, engine)
+            COUNT(*) AS payment_count,
+            SUM(amount_paid) AS amount_paid,
+            CASE
+                WHEN BOOL_OR(status != 'paid') THEN 'pending'
+                ELSE 'paid'
+            END AS payment_status
+        FROM staging_sosys_payments
+        GROUP BY claim_code
+    )
+    SELECT
+        o.code AS claim_code,
+        o.hospital_name,
+        COALESCE(o.district, 'Unknown') AS district,
+        o.amount_claimed,
+        COALESCE(s.amount_paid, 0) AS amount_paid,
+        o.amount_claimed - COALESCE(s.amount_paid, 0) AS amount_variance,
+        COALESCE(s.payment_status, 'missing') AS payment_status,
+        COALESCE(s.payment_count, 0) AS payment_count,
+        CASE
+            WHEN s.claim_code IS NULL THEN 'MISSING_PAYMENT'
+            WHEN s.payment_count > 1 THEN 'DUPLICATE_PAYMENT'
+            WHEN s.payment_status != 'paid' THEN 'STATUS_PENDING'
+            WHEN o.amount_claimed != s.amount_paid THEN 'AMOUNT_MISMATCH'
+            ELSE 'RECONCILED'
+        END AS reconciliation_status,
+        CASE
+            WHEN s.claim_code IS NULL THEN 'No SOSYS/Mojaloop payment was found for this approved OpenIMIS claim.'
+            WHEN s.payment_count > 1 THEN 'Multiple payment records exist for one claim; possible duplicate payout.'
+            WHEN s.payment_status != 'paid' THEN 'Payment exists but is not marked paid in SOSYS/Mojaloop.'
+            WHEN o.amount_claimed != s.amount_paid THEN 'Claimed and paid amounts differ by NPR ' || ABS(o.amount_claimed - s.amount_paid)::TEXT || '.'
+            ELSE 'Claim amount and payment amount match, and payment is marked paid.'
+        END AS reconciliation_reason,
+        CASE
+            WHEN s.claim_code IS NULL THEN 'HIGH'
+            WHEN s.payment_count > 1 THEN 'HIGH'
+            WHEN o.amount_claimed != s.amount_paid AND ABS(o.amount_claimed - s.amount_paid) >= 10000 THEN 'HIGH'
+            WHEN o.amount_claimed != s.amount_paid THEN 'MEDIUM'
+            WHEN s.payment_status != 'paid' THEN 'MEDIUM'
+            ELSE 'LOW'
+        END AS risk_level
+    FROM staging_openimis_claims o
+    LEFT JOIN payment_rollup s
+        ON o.code = s.claim_code
+    ORDER BY
+        CASE
+            WHEN s.claim_code IS NULL THEN 1
+            WHEN s.payment_count > 1 THEN 1
+            WHEN o.amount_claimed != s.amount_paid AND ABS(o.amount_claimed - s.amount_paid) >= 10000 THEN 1
+            WHEN o.amount_claimed != s.amount_paid THEN 2
+            WHEN s.payment_status != 'paid' THEN 2
+            ELSE 3
+        END,
+        o.code;
+"""
+
+
+def run_reconciliation():
+    df = pd.read_sql(RECONCILE_SQL, engine)
     return dataframe_records(df)
 
 
@@ -214,28 +251,22 @@ def run_pipeline():
         try:
             from .extract_openimis import extract_and_load as extract_openimis
             from .extract_sosys import extract_and_load as extract_sosys
-            from .reconcile_sql import run_sql_reconciliation
         except ImportError:
             from extract_openimis import extract_and_load as extract_openimis
             from extract_sosys import extract_and_load as extract_sosys
-            from reconcile_sql import run_sql_reconciliation
 
         extract_openimis()
         extract_sosys()
-        run_sql_reconciliation()
 
-        data = run_reconciliation()
-        stats = build_stats(data)
-        stats["claims_extracted"] = table_count("staging_openimis_claims")
-        stats["payments_extracted"] = table_count("staging_sosys_payments")
+        claims_count = table_count("staging_openimis_claims")
+        payments_count = table_count("staging_sosys_payments")
 
         last_synced = datetime.now(timezone.utc)
-        finish_pipeline_run(run_id, "SUCCESS", "Pipeline completed successfully.", stats)
+        finish_pipeline_run(run_id, "SUCCESS", f"Extracted {claims_count} claims and {payments_count} payments.", {"claims_extracted": claims_count, "payments_extracted": payments_count})
         return {
             "status": "ok",
-            "message": "Pipeline completed successfully",
+            "message": f"Extracted {claims_count} claims and {payments_count} payments. Refresh dashboard to reconcile.",
             "last_synced": last_synced.isoformat(),
-            "stats": stats,
         }
     except Exception as e:
         finish_pipeline_run(run_id, "FAILED", str(e), {})
@@ -718,15 +749,16 @@ HTML_TEMPLATE = """
             }
 
             async function runPipeline() {
-                document.getElementById('pipeline-status').innerHTML = 'Running ETL pipeline: OpenIMIS extract, SOSYS extract, SQL reconcile...';
+                document.getElementById('pipeline-status').innerHTML = 'Extracting claims from OpenIMIS and payments from SOSYS...';
                 document.getElementById('pipeline-status').style.color = '#2878b5';
                 try {
                     const resp = await fetch('/api/run-pipeline', { method: 'POST' });
                     const result = await resp.json();
                     if (result.status === 'ok') {
-                        document.getElementById('pipeline-status').innerHTML = 'Pipeline completed successfully.';
+                        document.getElementById('pipeline-status').innerHTML = result.message;
                         document.getElementById('pipeline-status').style.color = '#1f8f52';
                         document.getElementById('last-synced').innerHTML = 'Last synced: ' + new Date(result.last_synced).toLocaleString();
+                        document.getElementById('pipeline-status').innerHTML += ' Click Refresh Dashboard to reconcile.';
                         await loadData();
                     } else {
                         document.getElementById('pipeline-status').innerHTML = 'Pipeline error: ' + escapeHtml(result.message);

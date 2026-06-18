@@ -1,0 +1,21 @@
+claim_code,health_facility,amount,payment_date,status
+CLM-2024-002,Civil Hospital,12500,2024-11-05,paid
+CLM-2024-004,Nepal Medical College,8500,2024-11-08,paid
+CLM-2024-007,Civil Hospital,5600,2024-11-12,paid
+CLM-2024-013,Patan Hospital,9800,2024-11-18,paid
+CLM-2024-018,Patan Hospital,11000,2024-11-23,paid
+CLM-2024-001,Bir Hospital,42000,2024-11-03,paid
+CLM-2024-005,Grande International Hospital,120000,2024-11-09,paid
+CLM-2024-010,Grande International Hospital,65000,2024-11-14,paid
+CLM-2024-099,Kathmandu Medical Center,35000,2024-11-10,paid
+CLM-2024-088,Bhaktapur Cancer Hospital,92000,2024-11-15,paid
+CLM-2024-003,Patan Hospital,78000,2024-11-07,paid
+CLM-2024-006,Bir Hospital,33000,2024-11-11,paid
+CLM-2024-002,Civil Hospital,12500,2024-11-20,paid
+CLM-2024-077,Nepal Medicity Hospital,48000,2024-11-22,paid
+CLM-2024-009,Nepal Medical College,15000,2024-11-13,paid
+CLM-2024-014,Nepal Medical College,148000,2024-11-19,paid
+CLM-2024-012,Civil Hospital,50000,2024-11-17,paid
+CLM-2024-016,Bir Hospital,28500,2024-11-21,paid
+CLM-2024-020,Grande International Hospital,19500,2024-11-25,paid
+CLM-2024-008,Patan Hospital,88000,2024-11-12,paid

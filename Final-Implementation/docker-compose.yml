@@ -1,0 +1,92 @@
+# Samanvaya — Docker Compose Integration for OpenIMIS
+# Add these services to your existing OpenIMIS docker-compose.yml
+
+version: "3.8"
+
+services:
+  # ── OpenIMIS Backend (with Samanvaya module mounted) ──
+  openimis-be:
+    image: openimis/backend:latest
+    volumes:
+      # Mount Samanvaya module as a volume for hot-reload
+      - ./openimis-be-samanvaya/samanvaya:/app/openimis/samanvaya
+    environment:
+      - DB_HOST=db
+      - DB_NAME=openimis
+      - DB_USER=openimis
+      - DB_PASSWORD=openimis
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+
+  # ── Celery Worker (processes Samanvaya payment tasks) ──
+  celery-worker:
+    image: openimis/backend:latest
+    command: celery -A openIMIS worker -l info -Q default,samanvaya
+    volumes:
+      - ./openimis-be-samanvaya/samanvaya:/app/openimis/samanvaya
+    environment:
+      - DB_HOST=db
+      - DB_NAME=openimis
+      - DB_USER=openimis
+      - DB_PASSWORD=openimis
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - db
+      - redis
+
+  # ── Celery Beat (polling safety net — runs every 5 min) ──
+  celery-beat:
+    image: openimis/backend:latest
+    command: celery -A openIMIS beat -l info
+    volumes:
+      - ./openimis-be-samanvaya/samanvaya:/app/openimis/samanvaya
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - redis
+
+  # ── OpenIMIS Frontend (with Samanvaya module mounted) ──
+  openimis-fe:
+    image: openimis/frontend:latest
+    volumes:
+      - ./openimis-fe-samanvaya/src:/app/src/samanvaya
+    ports:
+      - "3000:3000"
+    depends_on:
+      - openimis-be
+
+  # ── Mock Bank (separate service for demo) ──
+  mock-bank:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mockbank
+    ports:
+      - "8001:8001"
+    environment:
+      - SAMANVAYA_WEBHOOK_URL=http://openimis-be:8000/webhook/gateway/
+
+  # ── Redis (Celery broker) ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # ── PostgreSQL (shared with OpenIMIS) ──
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=openimis
+      - POSTGRES_USER=openimis
+      - POSTGRES_PASSWORD=openimis
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
