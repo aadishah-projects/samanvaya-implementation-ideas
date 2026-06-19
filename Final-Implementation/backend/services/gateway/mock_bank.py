@@ -64,3 +64,11 @@ class MockBankGateway(BasePaymentGateway):
                 request_payload={},
                 error_msg=str(e),
             )
+
+    def create_ghost_payment(self, payload: dict) -> dict:
+        try:
+            resp = httpx.post(f"{MOCK_BANK_URL}/ghost-payment", json=payload, timeout=5.0)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            return {"ok": False, "error": str(e), "request_payload": payload}

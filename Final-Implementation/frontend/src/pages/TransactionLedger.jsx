@@ -6,6 +6,7 @@ export default function TransactionLedger() {
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [clinical, setClinical] = useState(null);
   const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
@@ -30,13 +31,6 @@ export default function TransactionLedger() {
   const retry = async (id) => {
     try {
       await api.post(`/transactions/${id}/retry`);
-      load();
-    } catch (e) { alert('Error: ' + (e.response?.data?.detail || e.message)); }
-  };
-
-  const verify = async (id) => {
-    try {
-      await api.post(`/transactions/${id}/verify`);
       load();
     } catch (e) { alert('Error: ' + (e.response?.data?.detail || e.message)); }
   };
@@ -67,6 +61,7 @@ export default function TransactionLedger() {
     try {
       const res = await api.delete('/transactions/ledger');
       setDetail(null);
+      setClinical(null);
       setMessage(
         `Cleared ${res.data.deleted_transactions} transactions, ${res.data.deleted_batches} batches, and reset ${res.data.reset_claims} claims.`
       );
@@ -76,114 +71,106 @@ export default function TransactionLedger() {
     }
   };
 
-  const npr = (v) => 'NPR ' + Number(v).toLocaleString('en-IN');
-  const badge = (s) => {
-    const c = { SUCCESS: 'bg-green-100 text-green-800', FAILED: 'bg-red-100 text-red-800', PENDING: 'bg-amber-100 text-amber-800', PROCESSING: 'bg-blue-100 text-blue-800', PARTIAL: 'bg-orange-100 text-orange-800' };
-    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c[s] || 'bg-gray-100'}`}>{s}</span>;
-  };
+  const npr = (v) => 'NPR ' + Number(v || 0).toLocaleString('en-IN');
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Transaction Ledger</h1>
-          <p className="mt-1 text-sm text-slate-500">Auditable Samanvaya payment attempts, gateway references, and retry state.</p>
+          <p className="mt-1 text-sm text-slate-500">Complete OpenIMIS payment history with claimed, approved, and paid amounts.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={exportCsv}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Export CSV
-          </button>
-          <button onClick={clearLedger}
-            className="rounded border border-red-700 bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800">
-            Clear Ledger
-          </button>
+          <button onClick={exportCsv} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Export CSV</button>
+          <button onClick={clearLedger} className="rounded border border-red-700 bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800">Clear Ledger</button>
         </div>
       </div>
 
-      {message && <div className="bg-sky-50 border border-sky-200 text-sky-900 px-4 py-2 mb-4 text-sm">{message}</div>}
+      {message && <div className="mb-4 border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">{message}</div>}
 
-      <div className="flex gap-3 mb-4">
-        <select value={filter} onChange={e => setFilter(e.target.value)}
-          className="border border-slate-300 px-3 py-1.5 text-sm bg-white">
+      <div className="mb-4 flex gap-3">
+        <select value={filter} onChange={e => setFilter(e.target.value)} className="border border-slate-300 bg-white px-3 py-1.5 text-sm">
           <option value="">All Statuses</option>
           <option value="SUCCESS">Success</option>
           <option value="FAILED">Failed</option>
           <option value="PROCESSING">Processing</option>
           <option value="PENDING">Pending</option>
         </select>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hospital..."
-          className="border border-slate-300 px-3 py-1.5 text-sm flex-1" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hospital..." className="flex-1 border border-slate-300 px-3 py-1.5 text-sm" />
       </div>
 
-      <div className="bg-white border border-slate-200 overflow-x-auto">
+      <div className="overflow-x-auto border border-slate-200 bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2 text-left">Claim</th>
               <th className="px-3 py-2 text-left">Hospital</th>
-              <th className="px-3 py-2 text-right">Amount</th>
+              <th className="px-3 py-2 text-right">Claimed</th>
+              <th className="px-3 py-2 text-right">Approved</th>
+              <th className="px-3 py-2 text-right">Paid</th>
               <th className="px-3 py-2 text-center">Status</th>
-              <th className="px-3 py-2 text-left">Gateway Ref</th>
-              <th className="px-3 py-2 text-left">Time</th>
-              <th className="px-3 py-2 text-center">Actions</th>
+              <th className="px-3 py-2 text-left">TXN ID</th>
+              <th className="px-3 py-2 text-center">Review</th>
             </tr>
           </thead>
           <tbody>
-            {txs.map(tx => (
-              <tr key={tx.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={() => showDetail(tx.id)}>
-                <td className="px-3 py-2 font-mono text-xs">{tx.claim_code || '-'}</td>
-                <td className="px-3 py-2">{tx.health_facility || '-'}</td>
-                <td className="px-3 py-2 text-right font-medium">{npr(tx.amount)}</td>
-                <td className="px-3 py-2 text-center">{badge(tx.status)}</td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-500">{tx.gateway_ref_id ? tx.gateway_ref_id.slice(0,12)+'...' : '-'}</td>
-                <td className="px-3 py-2 text-xs text-gray-500">{new Date(tx.created_at).toLocaleString()}</td>
-                <td className="px-3 py-2 text-center">
-                  {tx.status === 'FAILED' && (
-                    <button onClick={e => { e.stopPropagation(); retry(tx.id); }}
-                      className="bg-amber-500 text-white px-2 py-0.5 rounded text-xs hover:bg-amber-600 mr-1">
-                      Retry
-                    </button>
-                  )}
-                  {tx.status === 'PROCESSING' && tx.gateway_ref_id && (
-                    <button onClick={e => { e.stopPropagation(); verify(tx.id); }}
-                      className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs hover:bg-blue-700">
-                      Verify
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {!txs.length && <tr><td colSpan="7" className="text-center text-gray-400 py-8">No transactions yet</td></tr>}
+            {txs.map(tx => {
+              const approved = Number(tx.approved_amount ?? tx.amount ?? 0);
+              const claimed = Number(tx.claimed_amount ?? approved);
+              const hasClinicalDifference = approved < claimed;
+              return (
+                <tr key={tx.id} className="border-t hover:bg-gray-50">
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 font-mono text-xs">{tx.claim_code || '-'}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2">{tx.health_facility || '-'}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 text-right">{npr(claimed)}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 text-right">{npr(approved)}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 text-right font-medium">{npr(tx.paid_amount)}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 text-center">{badge(tx.status)}</td>
+                  <td onClick={() => showDetail(tx.id)} className="cursor-pointer px-3 py-2 font-mono text-xs text-gray-500">{tx.gateway_ref_id || tx.id}</td>
+                  <td className="px-3 py-2 text-center">
+                    {hasClinicalDifference && (
+                      <button onClick={() => setClinical(tx)} className="rounded border border-sky-700 bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-800">Review</button>
+                    )}
+                    {tx.status === 'FAILED' && (
+                      <button onClick={() => retry(tx.id)} className="ml-1 rounded border border-amber-600 bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">Retry</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!txs.length && <tr><td colSpan="8" className="py-8 text-center text-gray-400">No transactions yet</td></tr>}
           </tbody>
         </table>
       </div>
 
+      {clinical && (
+        <ClinicalModal tx={clinical} onClose={() => setClinical(null)} />
+      )}
+
       {detail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetail(null)}>
+          <div className="mx-4 w-full max-w-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold">Transaction Detail</h2>
-              <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+              <button onClick={() => setDetail(null)} className="text-xl text-gray-400 hover:text-gray-600">&times;</button>
             </div>
-            <dl className="text-sm space-y-2">
-              <Row label="ID" value={detail.id} />
+            <dl className="space-y-2 text-sm">
+              <Row label="TXN ID" value={detail.id} mono />
               <Row label="Status" value={badge(detail.status)} />
-              <Row label="Amount" value={npr(detail.amount)} />
+              <Row label="Claimed" value={npr(detail.claimed_amount)} />
+              <Row label="Approved" value={npr(detail.approved_amount ?? detail.amount)} />
+              <Row label="Paid" value={npr(detail.paid_amount)} />
               <Row label="Hospital" value={detail.health_facility} />
-              <Row label="Idempotency Key" value={detail.idempotency_key} mono />
-              <Row label="Gateway Ref" value={detail.gateway_ref_id || '-'} mono />
-              <Row label="Retries" value={detail.retry_count} />
-              <Row label="Webhook At" value={detail.webhook_received_at ? new Date(detail.webhook_received_at).toLocaleString() : '-'} />
+              <Row label="Financial" value={detail.financial_screening_completed ? (detail.financial_screening_reason || 'Recorded') : 'Required'} />
             </dl>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>
-                <h3 className="text-xs font-semibold text-gray-500 mb-1">Request Log</h3>
-                <pre className="bg-gray-50 rounded p-2 text-xs overflow-auto max-h-32">{JSON.stringify(detail.raw_request_log, null, 2)}</pre>
+                <h3 className="mb-1 text-xs font-semibold text-gray-500">Request Log</h3>
+                <pre className="max-h-32 overflow-auto bg-gray-50 p-2 text-xs">{JSON.stringify(detail.raw_request_log, null, 2)}</pre>
               </div>
               <div>
-                <h3 className="text-xs font-semibold text-gray-500 mb-1">Response Log</h3>
-                <pre className="bg-gray-50 rounded p-2 text-xs overflow-auto max-h-32">{JSON.stringify(detail.raw_response_log, null, 2)}</pre>
+                <h3 className="mb-1 text-xs font-semibold text-gray-500">Response Log</h3>
+                <pre className="max-h-32 overflow-auto bg-gray-50 p-2 text-xs">{JSON.stringify(detail.raw_response_log, null, 2)}</pre>
               </div>
             </div>
           </div>
@@ -193,8 +180,54 @@ export default function TransactionLedger() {
   );
 }
 
+function ClinicalModal({ tx, onClose }) {
+  const reasons = tx.clinical_screening_reasons?.length ? tx.clinical_screening_reasons : ['Clinical tariff adjustment'];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="mx-4 w-full max-w-md bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Clinical Screening Review</h2>
+            <p className="mt-1 font-mono text-xs text-slate-500">{tx.claim_code}</p>
+          </div>
+          <button onClick={onClose} className="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <Metric label="Claimed" value={'NPR ' + Number(tx.claimed_amount || 0).toLocaleString('en-IN')} />
+          <Metric label="Approved" value={'NPR ' + Number(tx.approved_amount || tx.amount || 0).toLocaleString('en-IN')} />
+        </div>
+        <ul className="mt-4 space-y-2">
+          {reasons.map((reason) => (
+            <li key={reason} className="border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{reason}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 p-3">
+      <div className="text-[11px] font-semibold uppercase text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
 function Row({ label, value, mono }) {
   return (
-    <div className="flex"><dt className="w-36 text-gray-500 shrink-0">{label}</dt><dd className={mono ? 'font-mono text-xs break-all' : ''}>{value}</dd></div>
+    <div className="flex"><dt className="w-36 shrink-0 text-gray-500">{label}</dt><dd className={mono ? 'break-all font-mono text-xs' : ''}>{value}</dd></div>
   );
+}
+
+function badge(status) {
+  const colors = {
+    SUCCESS: 'border-green-200 bg-green-50 text-green-800',
+    FAILED: 'border-red-200 bg-red-50 text-red-800',
+    PENDING: 'border-amber-200 bg-amber-50 text-amber-800',
+    PROCESSING: 'border-blue-200 bg-blue-50 text-blue-800',
+    PARTIAL: 'border-orange-200 bg-orange-50 text-orange-800',
+  };
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${colors[status] || 'border-gray-200 bg-gray-50 text-gray-700'}`}>{status}</span>;
 }

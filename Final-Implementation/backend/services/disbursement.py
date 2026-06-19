@@ -1,6 +1,7 @@
 """Bulk Disbursement Service: the financial heart of Samanvaya."""
 import re
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -52,8 +53,12 @@ class BulkDisbursementService:
                     batch_id=batch.id,
                     claim_id=claim.id,
                     amount=claim.approved_amount,
+                    claimed_amount=claim.claimed_amount,
+                    approved_amount=claim.approved_amount,
+                    paid_amount=0.0,
                     status=TransactionStatus.PENDING.value,
                     gateway_name="mock_bank",
+                    clinical_screening_reasons=clinical_screening_reasons(claim),
                 )
             )
             claim.status = ClaimStatus.QUEUED.value
@@ -113,8 +118,8 @@ class BulkDisbursementService:
 
         return created_batches, over_limit_claims
 
-    def execute_batch(self, batch_id: str) -> PaymentBatch:
-        """Execute all PENDING transactions in a batch through the gateway."""
+    def pay_batch(self, batch_id: str, pay_less: bool = False) -> PaymentBatch:
+        """Record OpenIMIS-approved payments in the internal and bank ledgers."""
         batch = self.db.query(PaymentBatch).filter_by(id=batch_id).first()
         if not batch:
             raise ValueError(f"Batch {batch_id} not found.")
@@ -134,9 +139,16 @@ class BulkDisbursementService:
             tx.status = TransactionStatus.PROCESSING.value
             self.db.commit()
 
+            approved_amount = float(tx.approved_amount or tx.amount or 0)
+            claimed_amount = (
+                float(tx.claimed_amount)
+                if tx.claimed_amount is not None
+                else float(tx.claim.claimed_amount if tx.claim else approved_amount)
+            )
+            paid_amount = paid_amount_for_instruction(approved_amount, pay_less)
             response = self.gateway.initiate_payout(
-                ref_id=str(tx.idempotency_key),
-                amount=tx.amount,
+                ref_id=str(tx.id),
+                amount=paid_amount,
                 recipient=tx.claim.health_facility if tx.claim else "Unknown",
                 metadata={
                     "batch_id": batch.id,
@@ -144,14 +156,82 @@ class BulkDisbursementService:
                     "claim_id": tx.claim_id,
                     "claim_code": tx.claim.claim_code if tx.claim else None,
                     "health_facility": tx.claim.health_facility if tx.claim else None,
+                    "openimis_transaction_id": tx.id,
+                    "claimed_amount": claimed_amount,
+                    "approved_amount": approved_amount,
+                    "simulation": "PAY_LESS" if pay_less else "PAY",
                 },
             )
 
             tx.raw_request_log = response.request_payload
             tx.gateway_ref_id = response.gateway_ref if response.gateway_ref else None
+            tx.paid_amount = paid_amount if response.status == "SUCCESS" else 0.0
+            tx.financial_screening_completed = False
             apply_gateway_status(self.db, tx, response.status, response.raw_response)
 
         return self.db.query(PaymentBatch).filter_by(id=batch_id).first()
+
+    def execute_batch(self, batch_id: str) -> PaymentBatch:
+        """Backward-compatible alias for the renamed Pay operation."""
+        return self.pay_batch(batch_id)
+
+    def inject_ghost_payment(self, batch_id: str) -> dict:
+        """Insert a bank-ledger-only payment for reconciliation testing."""
+        batch = self.db.query(PaymentBatch).filter_by(id=batch_id).first()
+        if not batch:
+            raise ValueError(f"Batch {batch_id} not found.")
+
+        return self.gateway.create_ghost_payment({
+            "batch_id": batch.id,
+            "batch_code": batch.batch_code,
+            "health_facility": batch.health_facility or "Unknown",
+            "amount": round(max(float(batch.total_amount or 0) * 0.07, 1000.0), 2),
+        })
+
+    def run_financial_screening(
+        self,
+        batch_id: str,
+        reason: str | None = None,
+        notes: str | None = None,
+    ) -> PaymentBatch:
+        """Record financial reasons for Approved vs Paid differences."""
+        batch = self.db.query(PaymentBatch).filter_by(id=batch_id).first()
+        if not batch:
+            raise ValueError(f"Batch {batch_id} not found.")
+
+        transactions = self.db.query(PaymentTransaction).filter_by(batch_id=batch_id).all()
+        if not transactions:
+            raise ValueError("No transactions found for this batch.")
+
+        difference_txs = [
+            tx for tx in transactions
+            if abs(float(tx.approved_amount or tx.amount or 0) - float(tx.paid_amount or 0)) > 0.01
+        ]
+        if difference_txs and not (reason or "").strip():
+            raise ValueError("Financial screening reason is required when Approved and Paid amounts differ.")
+
+        screened_at = datetime.now(timezone.utc).isoformat()
+        for tx in transactions:
+            approved_amount = float(tx.approved_amount or tx.amount or 0)
+            paid_amount = float(tx.paid_amount or 0)
+            has_difference = abs(approved_amount - paid_amount) > 0.01
+            tx.financial_screening_completed = True
+            tx.financial_screening_reason = (reason or "").strip() if has_difference else "No financial difference"
+            tx.financial_screening_notes = (notes or "").strip() if has_difference else None
+            tx.raw_response_log = {
+                **(tx.raw_response_log or {}),
+                "financial_screening": {
+                    "completed_at": screened_at,
+                    "reason": tx.financial_screening_reason,
+                    "notes": tx.financial_screening_notes,
+                    "approved_amount": approved_amount,
+                    "paid_amount": paid_amount,
+                },
+            }
+
+        self.db.commit()
+        self.db.refresh(batch)
+        return batch
 
     def retry_transaction(self, transaction_id: str) -> PaymentTransaction:
         """Retry a FAILED transaction with a new idempotency key."""
@@ -211,3 +291,28 @@ def _hospital_code(name: str) -> str:
         return "HF"
     code = "".join(token[0].upper() for token in tokens[:4])
     return code[:8] or "HF"
+
+
+def paid_amount_for_instruction(approved_amount: float, pay_less: bool) -> float:
+    if not pay_less:
+        return round(float(approved_amount), 2)
+    return round(max(float(approved_amount) * 0.9, 0.0), 2)
+
+
+def clinical_screening_reasons(claim: Claim) -> list[str]:
+    claimed = float(claim.claimed_amount or 0)
+    approved = float(claim.approved_amount or 0)
+    if approved >= claimed:
+        return []
+
+    reasons: list[str] = []
+    difference = claimed - approved
+    if claimed >= 100000 or difference >= 5000:
+        reasons.append("Exceeded policy limit")
+    if claim.diagnosis and "diabetes" in claim.diagnosis.lower():
+        reasons.append("Non-covered drug")
+    if claim.is_reclaim or difference >= 3000:
+        reasons.append("Documentation missing")
+    if not reasons:
+        reasons.append("Clinical tariff adjustment")
+    return reasons

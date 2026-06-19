@@ -6,6 +6,7 @@ export default function Reconciliation() {
   const [summary, setSummary] = useState(null);
   const [tab, setTab] = useState('ALL');
   const [message, setMessage] = useState('');
+  const [review, setReview] = useState(null);
 
   const load = async () => {
     try {
@@ -16,7 +17,7 @@ export default function Reconciliation() {
       setResults(r.data);
       setSummary(s.data);
     } catch (e) {
-      console.error(e);
+      setMessage('Could not load reconciliation results: ' + (e.response?.data?.detail || e.message));
     }
   };
 
@@ -25,7 +26,7 @@ export default function Reconciliation() {
   }, []);
 
   const runComparison = async () => {
-    setMessage('Running ledger comparison...');
+    setMessage('Running OpenIMIS vs Bank comparison...');
     try {
       const res = await api.post('/reconciliation/run');
       setSummary(res.data);
@@ -41,7 +42,7 @@ export default function Reconciliation() {
       await api.post(`/reconciliation/${id}/resolve`);
       await load();
     } catch (e) {
-      console.error(e);
+      setMessage('Resolve failed: ' + (e.response?.data?.detail || e.message));
     }
   };
 
@@ -53,7 +54,7 @@ export default function Reconciliation() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Reconciliation Console</h1>
-          <p className="mt-1 text-sm text-slate-500">Comparing SOSYS Audit Ledger vs Mock Bank Ledger.</p>
+          <p className="mt-1 text-sm text-slate-500">Comparing the OpenIMIS ledger against the Bank ledger.</p>
         </div>
         <button
           onClick={runComparison}
@@ -67,11 +68,11 @@ export default function Reconciliation() {
 
       {summary && (
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Insight label="Matched" value={summary.matched} tone="emerald" note="Perfect match" />
-          <Insight label="Ghost Payments" value={summary.ghost_payments} tone="red" note="Bank only" />
-          <Insight label="Missing Payments" value={summary.missing_payments ?? summary.missing_in_sosys} tone="amber" note="SOSYS only" />
-          <Insight label="Amount Mismatches" value={summary.amount_mismatches} tone="orange" note="Amounts differ" />
-          <Insight label="Duplicates" value={summary.duplicates} tone="rose" note="Repeated legacy rows" />
+          <Insight label="Matched" value={summary.matched} tone="emerald" note="Fully reconciled" />
+          <Insight label="Flagged" value={summary.flagged} tone="red" note="Review needed" />
+          <Insight label="Ghost Payments" value={summary.ghost_payments} tone="rose" note="Bank only" />
+          <Insight label="Missing Payments" value={summary.missing_payments ?? summary.missing_in_sosys} tone="amber" note="OpenIMIS only" />
+          <Insight label="Differences" value={summary.amount_mismatches} tone="orange" note="Claimed vs paid" />
         </div>
       )}
 
@@ -81,10 +82,11 @@ export default function Reconciliation() {
           ['MATCHED', 'Matched'],
           ['UNMATCHED', 'Unmatched'],
           ['FLAGGED', 'Flagged'],
+          ['FINANCIAL_SCREENING_REQUIRED', 'Screening Required'],
+          ['CLAIMED_PAID_MISMATCH', 'Claimed vs Paid'],
           ['GHOST_PAYMENT', 'Ghost'],
           ['MISSING_PAYMENT', 'Missing'],
-          ['AMOUNT_MISMATCH', 'Mismatch'],
-          ['DUPLICATE', 'Duplicate'],
+          ['STATUS_MISMATCH', 'Status'],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -102,32 +104,52 @@ export default function Reconciliation() {
 
       <section className="border border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">Line-by-Line Comparison ({filtered.length})</h2>
+          <h2 className="text-sm font-semibold text-slate-800">OpenIMIS vs Bank ({filtered.length})</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-3 py-2 text-left">Claim Code</th>
+                <th className="px-3 py-2 text-left">TXN ID</th>
+                <th className="px-3 py-2 text-left">Claim</th>
                 <th className="px-3 py-2 text-left">Hospital</th>
-                <th className="px-3 py-2 text-right">SOSYS Amount</th>
-                <th className="px-3 py-2 text-left">Batch</th>
-                <th className="px-3 py-2 text-center">Flag</th>
-                <th className="px-3 py-2 text-left">Insight</th>
-                <th className="px-3 py-2 text-left">Notes</th>
+                <th className="px-3 py-2 text-right">Claimed</th>
+                <th className="px-3 py-2 text-right">Approved</th>
+                <th className="px-3 py-2 text-right">Paid</th>
+                <th className="px-3 py-2 text-right">Clinical</th>
+                <th className="px-3 py-2 text-right">Financial</th>
+                <th className="px-3 py-2 text-right">Total Flag</th>
+                <th className="px-3 py-2 text-center">Status</th>
+                <th className="px-3 py-2 text-left">Review</th>
                 <th className="px-3 py-2 text-center">Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id} className={`border-t border-slate-100 ${rowTone(r)}`}>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{r.gateway_ref_id || r.id}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.claim_code}</td>
                   <td className="px-3 py-2">{r.health_facility}</td>
-                  <td className="px-3 py-2 text-right">{npr(r.amount)}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{r.batch_code || '-'}</td>
+                  <td className="px-3 py-2 text-right">{npr(r.claimed_amount)}</td>
+                  <td className="px-3 py-2 text-right">{npr(r.approved_amount ?? r.amount)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{npr(r.paid_amount)}</td>
+                  <td className="px-3 py-2 text-right">{npr(r.clinical_difference)}</td>
+                  <td className="px-3 py-2 text-right">{npr(r.financial_difference)}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{npr(r.total_difference)}</td>
                   <td className="px-3 py-2 text-center">{badge(r.match_status)}</td>
-                  <td className="px-3 py-2 text-xs font-semibold text-slate-700">{formatIssue(r.issue_type)}</td>
-                  <td className="max-w-md px-3 py-2 text-xs text-slate-600">{r.notes || '-'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {needsFinancialReview(r) && (
+                        <button
+                          onClick={() => setReview(r)}
+                          className="rounded border border-sky-700 bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-800"
+                        >
+                          Financial
+                        </button>
+                      )}
+                      <span className="text-xs font-semibold text-slate-700">{formatIssue(r.issue_type)}</span>
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-center">
                     {r.match_status !== 'MATCHED' && !r.resolved && (
                       <button
@@ -143,13 +165,45 @@ export default function Reconciliation() {
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan="8" className="py-8 text-center text-slate-400">No comparison rows yet. Approve a bank batch or upload SOSYS audit data first.</td>
+                  <td colSpan="12" className="py-8 text-center text-slate-400">No reconciliation rows yet. Run a comparison after paying a batch.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {review && <FinancialReview row={review} onClose={() => setReview(null)} />}
+    </div>
+  );
+}
+
+function FinancialReview({ row, onClose }) {
+  const npr = (v) => 'NPR ' + Number(v || 0).toLocaleString('en-IN');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="mx-4 w-full max-w-lg bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Financial Screening Review</h2>
+            <p className="mt-1 font-mono text-xs text-slate-500">{row.gateway_ref_id || row.id}</p>
+          </div>
+          <button onClick={onClose} className="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+          <Metric label="Approved" value={npr(row.approved_amount ?? row.amount)} />
+          <Metric label="Paid" value={npr(row.paid_amount)} />
+          <Metric label="Difference" value={npr(row.financial_difference)} />
+        </div>
+
+        <dl className="mt-4 space-y-2 text-sm">
+          <Row label="Reason" value={row.financial_reason || (row.financial_screening_completed ? 'Recorded with no settlement difference' : 'Financial screening required')} />
+          <Row label="Notes" value={row.financial_notes || '-'} />
+          <Row label="Final Flag" value={row.notes || '-'} />
+        </dl>
+      </div>
     </div>
   );
 }
@@ -171,6 +225,24 @@ function Insight({ label, value, note, tone }) {
   );
 }
 
+function Metric({ label, value }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 p-3">
+      <div className="text-[11px] font-semibold uppercase text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex gap-3">
+      <dt className="w-24 shrink-0 text-slate-500">{label}</dt>
+      <dd className="text-slate-800">{value}</dd>
+    </div>
+  );
+}
+
 function badge(status) {
   const colors = {
     MATCHED: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -185,10 +257,19 @@ function formatIssue(issue) {
   return issue.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function needsFinancialReview(row) {
+  return (
+    Math.abs(Number(row.financial_difference || 0)) > 0.01 ||
+    row.financial_reason ||
+    row.financial_notes ||
+    row.issue_type === 'FINANCIAL_SCREENING_REQUIRED'
+  );
+}
+
 function rowTone(row) {
   if (row.match_status === 'MATCHED') return '';
   if (row.issue_type === 'GHOST_PAYMENT') return 'bg-red-50/70';
   if (row.issue_type === 'MISSING_IN_SOSYS' || row.issue_type === 'MISSING_PAYMENT') return 'bg-amber-50/70';
-  if (row.issue_type === 'DUPLICATE') return 'bg-rose-50/70';
+  if (row.issue_type === 'FINANCIAL_SCREENING_REQUIRED') return 'bg-sky-50/70';
   return 'bg-orange-50/70';
 }

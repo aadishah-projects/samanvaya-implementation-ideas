@@ -21,7 +21,7 @@ def get_summary(db: Session = Depends(get_db)):
         TransactionStatus.PENDING.value, TransactionStatus.PROCESSING.value
     ))
     failed = sum(1 for t in txs if t.status == TransactionStatus.FAILED.value)
-    disbursed = sum(t.amount for t in txs if t.status == TransactionStatus.SUCCESS.value)
+    disbursed = sum((t.paid_amount if t.paid_amount is not None else t.amount) for t in txs if t.status == TransactionStatus.SUCCESS.value)
     rate = round((success / total) * 100, 1) if total > 0 else 0.0
 
     return DashboardSummaryResponse(
@@ -47,7 +47,7 @@ def get_volume(db: Session = Depends(get_db)):
     for tx in txs:
         if tx.created_at:
             day = tx.created_at.strftime("%Y-%m-%d")
-            daily[day]["total"] += tx.amount
+            daily[day]["total"] += tx.paid_amount if tx.paid_amount is not None else tx.amount
             daily[day]["count"] += 1
 
     result = []

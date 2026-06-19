@@ -31,8 +31,12 @@ def apply_gateway_status(
 
     if normalized == "SUCCESS":
         tx.status = TransactionStatus.SUCCESS.value
+        if tx.paid_amount is None:
+            tx.paid_amount = tx.approved_amount if tx.approved_amount is not None else tx.amount
     elif normalized == "FAILED":
         tx.status = TransactionStatus.FAILED.value
+        if tx.paid_amount is None:
+            tx.paid_amount = 0.0
     elif normalized in {"INITIATED", "PENDING", "PROCESSING"}:
         tx.status = TransactionStatus.PROCESSING.value
 

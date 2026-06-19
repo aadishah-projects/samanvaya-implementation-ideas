@@ -30,3 +30,7 @@ class BasePaymentGateway(ABC):
     def verify_status(self, gateway_ref: str) -> PayoutResponse:
         """Check the current status of a previously initiated payout."""
         pass
+
+    def create_ghost_payment(self, payload: dict) -> dict:
+        """Optional demo hook for creating bank-ledger-only anomalies."""
+        raise NotImplementedError("This gateway does not support ghost payment simulation.")

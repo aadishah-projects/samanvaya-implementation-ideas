@@ -10,6 +10,7 @@ from schemas import (
     BatchDetailResponse,
     BatchDetailTransactionResponse,
     BatchResponse,
+    FinancialScreeningRequest,
     TransactionResponse,
 )
 from services.disbursement import BulkDisbursementService
@@ -81,8 +82,15 @@ def get_batch_details(batch_id: str, db: Session = Depends(get_db)):
                 insuree_name=tx.claim.insuree_name if tx.claim else None,
                 health_facility=tx.claim.health_facility if tx.claim else None,
                 amount=tx.amount,
+                claimed_amount=tx.claimed_amount,
+                approved_amount=tx.approved_amount or tx.amount,
+                paid_amount=tx.paid_amount,
                 status=tx.status,
                 gateway_ref_id=tx.gateway_ref_id,
+                clinical_screening_reasons=tx.clinical_screening_reasons or [],
+                financial_screening_reason=tx.financial_screening_reason,
+                financial_screening_notes=tx.financial_screening_notes,
+                financial_screening_completed=bool(tx.financial_screening_completed),
                 retry_count=tx.retry_count,
                 created_at=tx.created_at,
                 updated_at=tx.updated_at,
@@ -97,8 +105,57 @@ def execute_batch(batch_id: str, db: Session = Depends(get_db)):
     gateway = MockBankGateway()
     service = BulkDisbursementService(db, gateway)
     try:
-        batch = service.execute_batch(batch_id)
+        batch = service.pay_batch(batch_id)
         return batch
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{batch_id}/pay", response_model=BatchResponse)
+def pay_batch(batch_id: str, db: Session = Depends(get_db)):
+    gateway = MockBankGateway()
+    service = BulkDisbursementService(db, gateway)
+    try:
+        batch = service.pay_batch(batch_id)
+        return batch
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{batch_id}/pay-less", response_model=BatchResponse)
+def pay_less(batch_id: str, db: Session = Depends(get_db)):
+    gateway = MockBankGateway()
+    service = BulkDisbursementService(db, gateway)
+    try:
+        batch = service.pay_batch(batch_id, pay_less=True)
+        return batch
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{batch_id}/ghost-payment")
+def ghost_payment(batch_id: str, db: Session = Depends(get_db)):
+    gateway = MockBankGateway()
+    service = BulkDisbursementService(db, gateway)
+    try:
+        result = service.inject_ghost_payment(batch_id)
+        if result.get("ok") is False:
+            raise HTTPException(status_code=502, detail=result.get("error") or "Mock Bank ghost injection failed.")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{batch_id}/financial-screening", response_model=BatchResponse)
+def run_financial_screening(
+    batch_id: str,
+    req: FinancialScreeningRequest,
+    db: Session = Depends(get_db),
+):
+    gateway = MockBankGateway()
+    service = BulkDisbursementService(db, gateway)
+    try:
+        return service.run_financial_screening(batch_id, req.reason, req.notes)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -119,6 +176,9 @@ def list_batch_transactions(batch_id: str, db: Session = Depends(get_db)):
             batch_id=tx.batch_id,
             claim_id=tx.claim_id,
             amount=tx.amount,
+            claimed_amount=tx.claimed_amount,
+            approved_amount=tx.approved_amount or tx.amount,
+            paid_amount=tx.paid_amount,
             status=tx.status,
             idempotency_key=tx.idempotency_key,
             gateway_name=tx.gateway_name,
@@ -128,5 +188,10 @@ def list_batch_transactions(batch_id: str, db: Session = Depends(get_db)):
             updated_at=tx.updated_at,
             health_facility=claim.health_facility if claim else None,
             claim_code=claim.claim_code if claim else None,
+            insuree_name=claim.insuree_name if claim else None,
+            clinical_screening_reasons=tx.clinical_screening_reasons or [],
+            financial_screening_reason=tx.financial_screening_reason,
+            financial_screening_notes=tx.financial_screening_notes,
+            financial_screening_completed=bool(tx.financial_screening_completed),
         ))
     return results

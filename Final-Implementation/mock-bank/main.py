@@ -1,4 +1,4 @@
-"""Mock Bank Server - simulates a payment gateway for demo purposes."""
+"""Mock Bank Server - simulates a settlement ledger for demo purposes."""
 import json
 import os
 import sqlite3
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import httpx
 
-app = FastAPI(title="Mock Bank - Samanvaya Demo Gateway")
+app = FastAPI(title="Mock Bank - Samanvaya Demo Ledger")
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,7 +23,7 @@ app.add_middleware(
 SAMANVAYA_WEBHOOK_URL = os.getenv("SAMANVAYA_WEBHOOK_URL", "http://localhost:8000/webhook/gateway")
 BANK_DB_PATH = os.getenv("MOCK_BANK_DB", os.path.join(os.path.dirname(__file__), "mock_bank.db"))
 
-# In-memory payout queue for the active demo session.
+# In-memory payout records for the active demo session.
 pending_payouts: dict[str, dict] = {}
 
 
@@ -123,7 +123,7 @@ async def process_payout(ref_id: str, status: str, webhook: bool = True) -> dict
         return {"error": f"Payout already {payout['status']}."}
 
     payout["status"] = status
-    payout["last_event"] = f"{'Approved' if status == 'SUCCESS' else 'Rejected'} by Mock Bank"
+    payout["last_event"] = f"{'Recorded' if status == 'SUCCESS' else 'Rejected'} by Mock Bank ledger"
     payout["processed_at"] = now_iso()
 
     if webhook:
@@ -195,26 +195,55 @@ def row_to_ledger(row: sqlite3.Row) -> dict:
 
 @app.post("/payout")
 async def receive_payout(payload: dict):
-    """Receive a payout request from Samanvaya."""
+    """Receive an OpenIMIS payment instruction and record settlement immediately."""
     ref_id = payload["ref_id"]
     existing = pending_payouts.get(ref_id)
     if existing:
         return {
             "gateway_ref_id": ref_id,
-            "status": "INITIATED" if existing["status"] == "PENDING" else existing["status"],
+            "status": existing["status"],
             "idempotent_replay": True,
         }
 
     pending_payouts[ref_id] = {
-        "status": "PENDING",
+        "status": "SUCCESS",
         "ref_id": ref_id,
         "amount": payload.get("amount", 0),
         "recipient": payload.get("recipient", "Unknown"),
         "metadata": payload.get("metadata") or {},
-        "last_event": "Received payout request from Samanvaya",
+        "last_event": "Recorded payment instruction from OpenIMIS",
         "created_at": now_iso(),
+        "processed_at": now_iso(),
     }
-    return {"gateway_ref_id": ref_id, "status": "INITIATED"}
+    record_if_batch_complete(batch_key(pending_payouts[ref_id]))
+    return {"gateway_ref_id": ref_id, "status": "SUCCESS"}
+
+
+@app.post("/ghost-payment")
+async def create_ghost_payment(payload: dict):
+    """Create a bank-ledger-only row that has no OpenIMIS transaction."""
+    ref_id = f"GHOST-{uuid.uuid4().hex[:10].upper()}"
+    batch_id = f"GHOST-BATCH-{uuid.uuid4().hex[:8].upper()}"
+    amount = float(payload.get("amount") or 1000)
+    pending_payouts[ref_id] = {
+        "status": "SUCCESS",
+        "ref_id": ref_id,
+        "amount": amount,
+        "recipient": payload.get("health_facility", "Unknown"),
+        "metadata": {
+            "batch_id": batch_id,
+            "batch_code": payload.get("batch_code") or batch_id,
+            "claim_id": None,
+            "claim_code": f"BANK-GHOST-{uuid.uuid4().hex[:6].upper()}",
+            "health_facility": payload.get("health_facility", "Unknown"),
+            "simulation": "GHOST_PAYMENT",
+        },
+        "last_event": "Injected bank-ledger-only ghost payment",
+        "created_at": now_iso(),
+        "processed_at": now_iso(),
+    }
+    record = record_if_batch_complete(batch_id)
+    return {"ok": True, "gateway_ref_id": ref_id, "record": record}
 
 
 @app.post("/reset")

@@ -54,7 +54,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2">
           <a href="http://localhost:8001/ui" target="_blank" rel="noreferrer"
             className="rounded border border-sky-700 bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-800">
-            Open Mock Bank
+            Open Bank Ledger
           </a>
           <button onClick={resetDemo}
             className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
@@ -68,7 +68,7 @@ export default function Dashboard() {
       {anomalyCount > 0 && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 mb-6 flex items-center gap-2">
           <span className="text-lg">&#9888;</span>
-          <span className="font-semibold">{anomalyCount} SOSYS Anomalies Detected</span>
+          <span className="font-semibold">{anomalyCount} Reconciliation Anomalies Detected</span>
         </div>
       )}
 

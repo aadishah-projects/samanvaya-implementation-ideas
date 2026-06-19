@@ -12,6 +12,12 @@ from routers import claims, batches, transactions, webhooks, dashboard, reconcil
 from services.poller import start_poller, stop_poller
 
 MOCK_BANK_URL = os.getenv("MOCK_BANK_URL", "http://localhost:8001")
+DEMO_RESET_ON_STARTUP = os.getenv("SAMANVAYA_DEMO_RESET_ON_STARTUP", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 @asynccontextmanager
@@ -19,8 +25,9 @@ async def lifespan(app: FastAPI):
     # Startup
     Base.metadata.create_all(bind=engine)
     sync_demo_schema()
-    reset_demo_runtime_state()
-    reset_mock_bank_runtime_state()
+    if DEMO_RESET_ON_STARTUP:
+        reset_demo_runtime_state()
+        reset_mock_bank_runtime_state()
     start_poller()
     yield
     # Shutdown

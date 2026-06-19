@@ -55,8 +55,15 @@ class BatchDetailTransactionResponse(BaseModel):
     insuree_name: Optional[str] = None
     health_facility: Optional[str] = None
     amount: float
+    claimed_amount: Optional[float] = None
+    approved_amount: Optional[float] = None
+    paid_amount: Optional[float] = None
     status: str
     gateway_ref_id: Optional[str] = None
+    clinical_screening_reasons: Optional[list[str]] = None
+    financial_screening_reason: Optional[str] = None
+    financial_screening_notes: Optional[str] = None
+    financial_screening_completed: bool = False
     retry_count: int
     created_at: datetime
     updated_at: datetime
@@ -120,12 +127,20 @@ class BatchAutoCreateResponse(BaseModel):
     batches: list[BatchResponse]
 
 
+class FinancialScreeningRequest(BaseModel):
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
 # ── Transactions ───────────────────────────────────────
 class TransactionResponse(BaseModel):
     id: str
     batch_id: str
     claim_id: str
     amount: float
+    claimed_amount: Optional[float] = None
+    approved_amount: Optional[float] = None
+    paid_amount: Optional[float] = None
     status: str
     idempotency_key: str
     gateway_name: str
@@ -135,6 +150,11 @@ class TransactionResponse(BaseModel):
     updated_at: datetime
     health_facility: Optional[str] = None
     claim_code: Optional[str] = None
+    insuree_name: Optional[str] = None
+    clinical_screening_reasons: Optional[list[str]] = None
+    financial_screening_reason: Optional[str] = None
+    financial_screening_notes: Optional[str] = None
+    financial_screening_completed: bool = False
 
     class Config:
         from_attributes = True
@@ -168,6 +188,9 @@ class ReconciliationResultResponse(BaseModel):
     claim_code: str
     health_facility: str
     amount: float
+    claimed_amount: Optional[float] = None
+    approved_amount: Optional[float] = None
+    paid_amount: Optional[float] = None
     batch_code: Optional[str] = None
     gateway_ref_id: Optional[str] = None
     payment_date: Optional[str] = None
@@ -176,6 +199,13 @@ class ReconciliationResultResponse(BaseModel):
     match_status: str
     issue_type: Optional[str] = None
     notes: Optional[str] = None
+    clinical_difference: float = 0.0
+    financial_difference: float = 0.0
+    total_difference: float = 0.0
+    clinical_reasons: Optional[list[str]] = None
+    financial_reason: Optional[str] = None
+    financial_notes: Optional[str] = None
+    financial_screening_completed: bool = False
     resolved: bool
 
     class Config:
