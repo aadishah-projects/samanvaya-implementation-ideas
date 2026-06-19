@@ -9,11 +9,18 @@ MOCK_BANK_URL = os.getenv("MOCK_BANK_URL", "http://localhost:8001")
 
 class MockBankGateway(BasePaymentGateway):
 
-    def initiate_payout(self, ref_id: str, amount: float, recipient: str) -> PayoutResponse:
+    def initiate_payout(
+        self,
+        ref_id: str,
+        amount: float,
+        recipient: str,
+        metadata: dict | None = None,
+    ) -> PayoutResponse:
         payload = {
             "ref_id": ref_id,
             "amount": amount,
             "recipient": recipient,
+            "metadata": metadata or {},
         }
         try:
             resp = httpx.post(f"{MOCK_BANK_URL}/payout", json=payload, timeout=5.0)

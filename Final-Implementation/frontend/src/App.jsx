@@ -39,6 +39,12 @@ export default function App() {
             </nav>
 
             <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => window.open('http://localhost:8001/ui', '_blank', 'noopener,noreferrer')}
+                className="hidden rounded border border-white/40 px-3 py-1.5 text-[12px] font-medium uppercase hover:bg-white/10 md:inline-flex"
+              >
+                Open Mock Bank
+              </button>
               <div className="hidden h-9 w-64 items-center gap-2 rounded bg-white px-3 text-[#757575] md:flex">
                 <span className="material-icons text-[20px]">search</span>
                 <input

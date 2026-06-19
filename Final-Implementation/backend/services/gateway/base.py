@@ -16,7 +16,13 @@ class PayoutResponse:
 
 class BasePaymentGateway(ABC):
     @abstractmethod
-    def initiate_payout(self, ref_id: str, amount: float, recipient: str) -> PayoutResponse:
+    def initiate_payout(
+        self,
+        ref_id: str,
+        amount: float,
+        recipient: str,
+        metadata: dict | None = None,
+    ) -> PayoutResponse:
         """Send a payout request to the payment gateway."""
         pass
 

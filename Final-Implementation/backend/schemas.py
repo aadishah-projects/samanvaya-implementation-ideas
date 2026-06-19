@@ -48,6 +48,24 @@ class BatchResponse(BaseModel):
         from_attributes = True
 
 
+class BatchDetailTransactionResponse(BaseModel):
+    id: str
+    claim_id: str
+    claim_code: Optional[str] = None
+    insuree_name: Optional[str] = None
+    health_facility: Optional[str] = None
+    amount: float
+    status: str
+    gateway_ref_id: Optional[str] = None
+    retry_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class BatchDetailResponse(BatchResponse):
+    transactions: list[BatchDetailTransactionResponse]
+
+
 class ClaimReviewRequest(BaseModel):
     status: str
     notes: Optional[str] = None
@@ -150,8 +168,11 @@ class ReconciliationResultResponse(BaseModel):
     claim_code: str
     health_facility: str
     amount: float
+    batch_code: Optional[str] = None
+    gateway_ref_id: Optional[str] = None
     payment_date: Optional[str] = None
     sosys_status: Optional[str] = None
+    source: Optional[str] = None
     match_status: str
     issue_type: Optional[str] = None
     notes: Optional[str] = None
@@ -168,6 +189,7 @@ class ReconciliationSummaryResponse(BaseModel):
     total: int
     ghost_payments: int = 0
     missing_in_sosys: int = 0
+    missing_payments: int = 0
     amount_mismatches: int = 0
     duplicates: int = 0
     status_mismatches: int = 0

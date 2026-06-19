@@ -3,108 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mock Bank Control Panel — Samanvaya</title>
+    <title>Mock Bank Control Panel - Samanvaya</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
             background: #0f172a;
             color: #e2e8f0;
+            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
             padding: 24px;
-            min-height: 100vh;
         }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .container { max-width: 1080px; margin: 0 auto; }
+        h1 { font-size: 24px; margin-bottom: 8px; }
         .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
         .status-bar {
             background: #1e293b;
             border: 1px solid #334155;
-            border-radius: 8px;
             padding: 12px 16px;
             margin-bottom: 20px;
             font-size: 13px;
             color: #94a3b8;
         }
-        .payout-card {
+        .section-title {
+            margin: 24px 0 12px;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .batch-card, .ledger-card {
             background: #1e293b;
             border: 1px solid #334155;
-            border-radius: 10px;
-            padding: 16px 20px;
+            padding: 16px;
             margin-bottom: 12px;
-            transition: border-color 0.2s;
         }
-        .payout-card:hover { border-color: #475569; }
-        .payout-card .top {
+        .top {
             display: flex;
-            justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 8px;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 12px;
         }
-        .payout-card .recipient { font-weight: 700; font-size: 16px; }
-        .payout-card .amount { font-size: 18px; font-weight: 800; color: #38bdf8; }
-        .payout-card .ref { font-size: 11px; color: #64748b; margin-top: 4px; font-family: monospace; }
-        .payout-card .actions { display: flex; gap: 8px; margin-top: 12px; }
+        .title { font-size: 16px; font-weight: 800; }
+        .muted { color: #94a3b8; font-size: 12px; }
+        .amount { color: #38bdf8; font-size: 18px; font-weight: 900; }
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+        button {
+            border: 0;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        button:hover { opacity: 0.86; }
+        .btn-approve { background: #16a34a; color: #fff; }
+        .btn-reject { background: #dc2626; color: #fff; }
+        .btn-silent { background: #d97706; color: #fff; }
         .badge {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 12px;
+            display: inline-flex;
+            padding: 3px 9px;
+            border-radius: 999px;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
         }
         .badge-pending { background: #854d0e; color: #fde68a; }
         .badge-success { background: #166534; color: #bbf7d0; }
         .badge-failed { background: #991b1b; color: #fecaca; }
-        button {
-            padding: 8px 20px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 700;
-            font-size: 13px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:hover { opacity: 0.85; }
-        button:active { opacity: 0.7; }
-        .btn-approve { background: #16a34a; color: white; }
-        .btn-reject { background: #dc2626; color: white; }
-        .btn-silent { background: #d97706; color: white; }
-        .event-note { color: #94a3b8; font-size: 12px; margin-top: 8px; }
+        .badge-partial { background: #9a3412; color: #fed7aa; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        th, td { border-top: 1px solid #334155; padding: 8px; text-align: left; }
+        th { color: #94a3b8; font-size: 11px; text-transform: uppercase; }
+        .right { text-align: right; }
         .empty {
-            text-align: center;
-            padding: 60px 20px;
+            border: 1px dashed #334155;
             color: #64748b;
-            font-size: 15px;
+            padding: 44px 20px;
+            text-align: center;
         }
-        .empty .icon { font-size: 40px; margin-bottom: 12px; }
-        .section-title {
-            font-size: 14px;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin: 24px 0 12px;
-        }
+        .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Mock Bank Control Panel</h1>
-        <p class="subtitle">Simulates payment gateway for Samanvaya demo. Approve or reject payouts to fire webhooks.</p>
+        <p class="subtitle">Approve or reject whole payout batches. Completed batches are persisted in the Mock Bank ledger for reconciliation.</p>
 
-        <div class="status-bar" id="status-bar">Loading payouts...</div>
+        <div class="status-bar" id="status-bar">Loading bank queue...</div>
 
-        <div class="section-title">Pending Payouts</div>
-        <div id="pending-queue"></div>
+        <div class="section-title">Pending Batches</div>
+        <div id="pending-batches"></div>
 
-        <div class="section-title">Processed</div>
-        <div id="processed-list"></div>
+        <div class="section-title">Processed Batch Ledger</div>
+        <div id="bank-ledger"></div>
     </div>
 
     <script>
@@ -112,69 +104,114 @@
 
         async function loadAll() {
             try {
-                const [pendingRes, allRes] = await Promise.all([
-                    fetch(`${API}/pending`),
-                    fetch(`${API}/all`),
+                const [batchRes, ledgerRes] = await Promise.all([
+                    fetch(`${API}/batches`),
+                    fetch(`${API}/ledger`),
                 ]);
-                const pending = await pendingRes.json();
-                const all = await allRes.json();
-                const processed = all.filter(p => p.status !== 'PENDING');
-
+                const batches = await batchRes.json();
+                const ledger = await ledgerRes.json();
+                const pending = batches.filter(batch => batch.status === 'PENDING');
                 document.getElementById('status-bar').textContent =
-                    `${pending.length} pending | ${processed.length} processed | ${all.length} total`;
-
-                renderPending(pending);
-                renderProcessed(processed);
+                    `${pending.length} pending batches | ${ledger.length} processed batch ledger rows`;
+                renderPendingBatches(pending);
+                renderLedger(ledger);
             } catch (e) {
-                document.getElementById('status-bar').textContent = 'Error loading payouts: ' + e.message;
+                document.getElementById('status-bar').textContent = 'Error loading bank queue: ' + e.message;
             }
         }
 
-        function renderPending(items) {
-            const el = document.getElementById('pending-queue');
+        function renderPendingBatches(items) {
+            const el = document.getElementById('pending-batches');
             if (!items.length) {
-                el.innerHTML = '<div class="empty"><div class="icon">&#9749;</div>No pending payouts. Execute a batch in Samanvaya to see them here.</div>';
+                el.innerHTML = '<div class="empty">No pending batches. Execute a Samanvaya batch to see it here.</div>';
                 return;
             }
-            el.innerHTML = items.map(item => `
-                <div class="payout-card">
+            el.innerHTML = items.map(batch => `
+                <div class="batch-card">
                     <div class="top">
                         <div>
-                            <div class="recipient">${esc(item.recipient)}</div>
-                            <div class="ref">${esc(item.ref_id)}</div>
+                            <div class="title">${esc(batch.batch_code || batch.ledger_key)}</div>
+                            <div class="muted mono">${esc(batch.ledger_key)}</div>
+                            <div class="muted">${batch.transaction_count} payouts</div>
                         </div>
-                        <div class="amount">NPR ${Number(item.amount).toLocaleString('en-IN')}</div>
+                        <div class="amount">NPR ${Number(batch.total_amount).toLocaleString('en-IN')}</div>
                     </div>
                     <span class="badge badge-pending">Pending</span>
                     <div class="actions">
-                        <button class="btn-approve" onclick="approve('${esc(item.ref_id)}')">Approve</button>
-                        <button class="btn-reject" onclick="reject('${esc(item.ref_id)}')">Reject</button>
-                        <button class="btn-silent" onclick="settleSilent('${esc(item.ref_id)}')">Settle Silently</button>
+                        <button class="btn-approve" onclick="approveBatch('${esc(batch.ledger_key)}')">Approve Batch</button>
+                        <button class="btn-reject" onclick="rejectBatch('${esc(batch.ledger_key)}')">Reject Batch</button>
                     </div>
+                    ${payoutTable(batch.payouts, true)}
                 </div>
             `).join('');
         }
 
-        function renderProcessed(items) {
-            const el = document.getElementById('processed-list');
+        function renderLedger(items) {
+            const el = document.getElementById('bank-ledger');
             if (!items.length) {
-                el.innerHTML = '<div class="empty"><div class="icon">&#10003;</div>No processed payouts yet.</div>';
+                el.innerHTML = '<div class="empty">No processed bank ledger rows yet.</div>';
                 return;
             }
-            el.innerHTML = items.map(item => `
-                <div class="payout-card">
+            el.innerHTML = items.map(row => `
+                <div class="ledger-card">
                     <div class="top">
                         <div>
-                            <div class="recipient">${esc(item.recipient)}</div>
-                            <div class="ref">${esc(item.ref_id)}</div>
+                            <div class="title">${esc(row.batch_code || row.ledger_key)}</div>
+                            <div class="muted mono">${esc(row.reference_number)}</div>
+                            <div class="muted">${new Date(row.processed_at).toLocaleString()}</div>
                         </div>
-                        <div class="amount">NPR ${Number(item.amount).toLocaleString('en-IN')}</div>
+                        <div>
+                            <div class="amount">NPR ${Number(row.total_amount).toLocaleString('en-IN')}</div>
+                            <span class="badge ${badgeClass(row.status)}">${esc(row.status)}</span>
+                        </div>
                     </div>
-                    <span class="badge ${item.status === 'SUCCESS' ? 'badge-success' : 'badge-failed'}">${esc(item.status)}</span>
-                    ${item.last_event ? `<div class="event-note">${esc(item.last_event)}</div>` : ''}
-                    ${item.webhook_error ? `<div class="event-note">Webhook error: ${esc(item.webhook_error)}</div>` : ''}
+                    ${payoutTable(row.payouts, false)}
                 </div>
             `).join('');
+        }
+
+        function payoutTable(items, allowIndividual) {
+            return `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Claim</th>
+                            <th>Recipient</th>
+                            <th class="right">Amount</th>
+                            <th>Status</th>
+                            ${allowIndividual ? '<th>Action</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map(item => {
+                            const metadata = item.metadata || {};
+                            return `
+                                <tr>
+                                    <td class="mono">${esc(metadata.claim_code || item.ref_id)}</td>
+                                    <td>${esc(item.recipient)}</td>
+                                    <td class="right">NPR ${Number(item.amount).toLocaleString('en-IN')}</td>
+                                    <td><span class="badge ${badgeClass(item.status)}">${esc(item.status)}</span></td>
+                                    ${allowIndividual ? `<td>
+                                        <button class="btn-approve" onclick="approve('${esc(item.ref_id)}')">Approve</button>
+                                        <button class="btn-reject" onclick="reject('${esc(item.ref_id)}')">Reject</button>
+                                        <button class="btn-silent" onclick="settleSilent('${esc(item.ref_id)}')">Silent</button>
+                                    </td>` : ''}
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function approveBatch(batchId) {
+            await fetch(`${API}/batches/${batchId}/approve`, { method: 'POST' });
+            loadAll();
+        }
+
+        async function rejectBatch(batchId) {
+            await fetch(`${API}/batches/${batchId}/reject`, { method: 'POST' });
+            loadAll();
         }
 
         async function approve(refId) {
@@ -192,9 +229,16 @@
             loadAll();
         }
 
+        function badgeClass(status) {
+            if (status === 'SUCCESS') return 'badge-success';
+            if (status === 'FAILED') return 'badge-failed';
+            if (status === 'PARTIAL') return 'badge-partial';
+            return 'badge-pending';
+        }
+
         function esc(s) {
             const d = document.createElement('div');
-            d.textContent = s;
+            d.textContent = s == null ? '' : String(s);
             return d.innerHTML;
         }
 

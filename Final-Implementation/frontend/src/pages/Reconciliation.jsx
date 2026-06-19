@@ -53,7 +53,7 @@ export default function Reconciliation() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Reconciliation Console</h1>
-          <p className="mt-1 text-sm text-slate-500">Comparing Samanvaya Ledger vs. Legacy SOSYS/Bank Ledger.</p>
+          <p className="mt-1 text-sm text-slate-500">Comparing SOSYS Audit Ledger vs Mock Bank Ledger.</p>
         </div>
         <button
           onClick={runComparison}
@@ -68,8 +68,8 @@ export default function Reconciliation() {
       {summary && (
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Insight label="Matched" value={summary.matched} tone="emerald" note="Perfect match" />
-          <Insight label="Ghost Payments" value={summary.ghost_payments} tone="red" note="In SOSYS only" />
-          <Insight label="Missing in SOSYS" value={summary.missing_in_sosys} tone="amber" note="Samanvaya success only" />
+          <Insight label="Ghost Payments" value={summary.ghost_payments} tone="red" note="Bank only" />
+          <Insight label="Missing Payments" value={summary.missing_payments ?? summary.missing_in_sosys} tone="amber" note="SOSYS only" />
           <Insight label="Amount Mismatches" value={summary.amount_mismatches} tone="orange" note="Amounts differ" />
           <Insight label="Duplicates" value={summary.duplicates} tone="rose" note="Repeated legacy rows" />
         </div>
@@ -82,7 +82,7 @@ export default function Reconciliation() {
           ['UNMATCHED', 'Unmatched'],
           ['FLAGGED', 'Flagged'],
           ['GHOST_PAYMENT', 'Ghost'],
-          ['MISSING_IN_SOSYS', 'Missing'],
+          ['MISSING_PAYMENT', 'Missing'],
           ['AMOUNT_MISMATCH', 'Mismatch'],
           ['DUPLICATE', 'Duplicate'],
         ].map(([value, label]) => (
@@ -110,7 +110,8 @@ export default function Reconciliation() {
               <tr>
                 <th className="px-3 py-2 text-left">Claim Code</th>
                 <th className="px-3 py-2 text-left">Hospital</th>
-                <th className="px-3 py-2 text-right">Legacy Amount</th>
+                <th className="px-3 py-2 text-right">SOSYS Amount</th>
+                <th className="px-3 py-2 text-left">Batch</th>
                 <th className="px-3 py-2 text-center">Flag</th>
                 <th className="px-3 py-2 text-left">Insight</th>
                 <th className="px-3 py-2 text-left">Notes</th>
@@ -123,6 +124,7 @@ export default function Reconciliation() {
                   <td className="px-3 py-2 font-mono text-xs">{r.claim_code}</td>
                   <td className="px-3 py-2">{r.health_facility}</td>
                   <td className="px-3 py-2 text-right">{npr(r.amount)}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{r.batch_code || '-'}</td>
                   <td className="px-3 py-2 text-center">{badge(r.match_status)}</td>
                   <td className="px-3 py-2 text-xs font-semibold text-slate-700">{formatIssue(r.issue_type)}</td>
                   <td className="max-w-md px-3 py-2 text-xs text-slate-600">{r.notes || '-'}</td>
@@ -141,7 +143,7 @@ export default function Reconciliation() {
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-400">No comparison rows yet. Load SOSYS data first.</td>
+                  <td colSpan="8" className="py-8 text-center text-slate-400">No comparison rows yet. Approve a bank batch or upload SOSYS audit data first.</td>
                 </tr>
               )}
             </tbody>
@@ -186,7 +188,7 @@ function formatIssue(issue) {
 function rowTone(row) {
   if (row.match_status === 'MATCHED') return '';
   if (row.issue_type === 'GHOST_PAYMENT') return 'bg-red-50/70';
-  if (row.issue_type === 'MISSING_IN_SOSYS') return 'bg-amber-50/70';
+  if (row.issue_type === 'MISSING_IN_SOSYS' || row.issue_type === 'MISSING_PAYMENT') return 'bg-amber-50/70';
   if (row.issue_type === 'DUPLICATE') return 'bg-rose-50/70';
   return 'bg-orange-50/70';
 }

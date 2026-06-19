@@ -7,6 +7,8 @@ from schemas import (
     BatchAutoCreateRequest,
     BatchAutoCreateResponse,
     BatchCreateRequest,
+    BatchDetailResponse,
+    BatchDetailTransactionResponse,
     BatchResponse,
     TransactionResponse,
 )
@@ -49,6 +51,45 @@ def create_batches_automatically(req: BatchAutoCreateRequest, db: Session = Depe
 @router.get("", response_model=list[BatchResponse])
 def list_batches(db: Session = Depends(get_db)):
     return db.query(PaymentBatch).order_by(PaymentBatch.created_at.desc()).all()
+
+
+@router.get("/{batch_id}", response_model=BatchDetailResponse)
+def get_batch_details(batch_id: str, db: Session = Depends(get_db)):
+    batch = db.query(PaymentBatch).filter_by(id=batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+
+    txs = (
+        db.query(PaymentTransaction)
+        .filter_by(batch_id=batch_id)
+        .order_by(PaymentTransaction.created_at)
+        .all()
+    )
+    return BatchDetailResponse(
+        id=batch.id,
+        batch_code=batch.batch_code,
+        health_facility=batch.health_facility,
+        created_at=batch.created_at,
+        total_amount=batch.total_amount,
+        claim_count=batch.claim_count,
+        status=batch.status,
+        transactions=[
+            BatchDetailTransactionResponse(
+                id=tx.id,
+                claim_id=tx.claim_id,
+                claim_code=tx.claim.claim_code if tx.claim else None,
+                insuree_name=tx.claim.insuree_name if tx.claim else None,
+                health_facility=tx.claim.health_facility if tx.claim else None,
+                amount=tx.amount,
+                status=tx.status,
+                gateway_ref_id=tx.gateway_ref_id,
+                retry_count=tx.retry_count,
+                created_at=tx.created_at,
+                updated_at=tx.updated_at,
+            )
+            for tx in txs
+        ],
+    )
 
 
 @router.post("/{batch_id}/execute", response_model=BatchResponse)

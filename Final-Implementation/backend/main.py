@@ -1,11 +1,17 @@
 """Samanvaya — Standalone Payment Execution Engine for OpenIMIS."""
 from contextlib import asynccontextmanager
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
-from database import engine, Base, sync_demo_schema
+from database import engine, Base, SessionLocal, sync_demo_schema
+from models import Claim, ClaimStatus, PaymentBatch, PaymentTransaction, SOSYSLegacyLog
 from routers import claims, batches, transactions, webhooks, dashboard, reconciliation, demo
 from services.poller import start_poller, stop_poller
+
+MOCK_BANK_URL = os.getenv("MOCK_BANK_URL", "http://localhost:8001")
 
 
 @asynccontextmanager
@@ -13,10 +19,40 @@ async def lifespan(app: FastAPI):
     # Startup
     Base.metadata.create_all(bind=engine)
     sync_demo_schema()
+    reset_demo_runtime_state()
+    reset_mock_bank_runtime_state()
     start_poller()
     yield
     # Shutdown
     stop_poller()
+
+
+def reset_demo_runtime_state() -> None:
+    """Clear runtime ledgers so every backend restart starts from a clean demo slate."""
+    db = SessionLocal()
+    try:
+        db.query(PaymentTransaction).delete(synchronize_session=False)
+        db.query(PaymentBatch).delete(synchronize_session=False)
+        db.query(SOSYSLegacyLog).delete(synchronize_session=False)
+        (
+            db.query(Claim)
+            .filter(Claim.status != ClaimStatus.APPROVED.value)
+            .update({Claim.status: ClaimStatus.APPROVED.value}, synchronize_session=False)
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def reset_mock_bank_runtime_state() -> None:
+    """Best-effort reset of the external demo gateway ledger."""
+    try:
+        httpx.post(f"{MOCK_BANK_URL}/reset", timeout=2.0)
+    except Exception:
+        pass
 
 
 app = FastAPI(

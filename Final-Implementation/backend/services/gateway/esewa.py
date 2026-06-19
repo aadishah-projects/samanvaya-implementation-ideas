@@ -11,7 +11,13 @@ class ESewaGateway(BasePaymentGateway):
     4. Verify webhook signatures on callbacks
     """
 
-    def initiate_payout(self, ref_id: str, amount: float, recipient: str) -> PayoutResponse:
+    def initiate_payout(
+        self,
+        ref_id: str,
+        amount: float,
+        recipient: str,
+        metadata: dict | None = None,
+    ) -> PayoutResponse:
         raise NotImplementedError(
             "eSewa gateway not implemented. "
             "Use MockBankGateway for development. "

@@ -1,12 +1,16 @@
-"""Mock Bank Server — simulates a payment gateway for demo purposes."""
+"""Mock Bank Server - simulates a payment gateway for demo purposes."""
+import json
 import os
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 import httpx
 
-app = FastAPI(title="Mock Bank — Samanvaya Demo Gateway")
+app = FastAPI(title="Mock Bank - Samanvaya Demo Gateway")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,9 +21,176 @@ app.add_middleware(
 )
 
 SAMANVAYA_WEBHOOK_URL = os.getenv("SAMANVAYA_WEBHOOK_URL", "http://localhost:8000/webhook/gateway")
+BANK_DB_PATH = os.getenv("MOCK_BANK_DB", os.path.join(os.path.dirname(__file__), "mock_bank.db"))
 
-# In-memory payout queue
+# In-memory payout queue for the active demo session.
 pending_payouts: dict[str, dict] = {}
+
+
+@app.on_event("startup")
+def startup():
+    init_bank_db()
+
+
+def init_bank_db():
+    with sqlite3.connect(BANK_DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_batch_ledger (
+                id TEXT PRIMARY KEY,
+                ledger_key TEXT UNIQUE NOT NULL,
+                batch_id TEXT,
+                batch_code TEXT,
+                status TEXT NOT NULL,
+                total_amount REAL NOT NULL,
+                transaction_count INTEGER NOT NULL,
+                reference_number TEXT NOT NULL,
+                processed_at TEXT NOT NULL,
+                payouts_json TEXT NOT NULL
+            )
+            """
+        )
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def batch_key(payout: dict) -> str:
+    metadata = payout.get("metadata") or {}
+    return metadata.get("batch_id") or payout["ref_id"]
+
+
+def batch_code(payout: dict) -> str:
+    metadata = payout.get("metadata") or {}
+    return metadata.get("batch_code") or batch_key(payout)
+
+
+def payouts_for_batch(key: str) -> list[dict]:
+    return [payout for payout in pending_payouts.values() if batch_key(payout) == key]
+
+
+def summarize_batch(items: list[dict]) -> dict:
+    if not items:
+        return {}
+    statuses = {item["status"] for item in items}
+    if statuses == {"SUCCESS"}:
+        status = "SUCCESS"
+    elif statuses == {"FAILED"}:
+        status = "FAILED"
+    elif "PENDING" in statuses:
+        status = "PENDING"
+    else:
+        status = "PARTIAL"
+
+    first = items[0]
+    key = batch_key(first)
+    return {
+        "batch_id": (first.get("metadata") or {}).get("batch_id"),
+        "batch_code": batch_code(first),
+        "ledger_key": key,
+        "status": status,
+        "total_amount": sum(float(item.get("amount") or 0) for item in items),
+        "transaction_count": len(items),
+        "payouts": items,
+    }
+
+
+def grouped_batches(only_pending: bool = False) -> list[dict]:
+    keys = sorted({batch_key(payout) for payout in pending_payouts.values()})
+    groups = []
+    for key in keys:
+        summary = summarize_batch(payouts_for_batch(key))
+        if only_pending and summary.get("status") != "PENDING":
+            continue
+        groups.append(summary)
+    return groups
+
+
+async def send_webhook(ref_id: str, status: str):
+    async with httpx.AsyncClient() as client:
+        await client.post(SAMANVAYA_WEBHOOK_URL, json={
+            "gateway_ref_id": ref_id,
+            "status": status,
+        }, timeout=5.0)
+
+
+async def process_payout(ref_id: str, status: str, webhook: bool = True) -> dict:
+    payout = pending_payouts.get(ref_id)
+    if not payout:
+        return {"error": "Payout not found."}
+    if payout["status"] != "PENDING":
+        return {"error": f"Payout already {payout['status']}."}
+
+    payout["status"] = status
+    payout["last_event"] = f"{'Approved' if status == 'SUCCESS' else 'Rejected'} by Mock Bank"
+    payout["processed_at"] = now_iso()
+
+    if webhook:
+        try:
+            await send_webhook(ref_id, status)
+            payout["last_event"] += " and webhook sent"
+        except Exception as e:
+            payout["webhook_error"] = str(e)
+
+    record_if_batch_complete(batch_key(payout))
+    return {"ok": True, "status": status}
+
+
+def record_if_batch_complete(key: str) -> dict | None:
+    items = payouts_for_batch(key)
+    if not items or any(item["status"] == "PENDING" for item in items):
+        return None
+
+    summary = summarize_batch(items)
+    reference_number = f"MBK-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+    processed_at = now_iso()
+    payouts_json = json.dumps(items)
+
+    with sqlite3.connect(BANK_DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO bank_batch_ledger (
+                id, ledger_key, batch_id, batch_code, status, total_amount,
+                transaction_count, reference_number, processed_at, payouts_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ledger_key) DO UPDATE SET
+                status=excluded.status,
+                total_amount=excluded.total_amount,
+                transaction_count=excluded.transaction_count,
+                reference_number=excluded.reference_number,
+                processed_at=excluded.processed_at,
+                payouts_json=excluded.payouts_json
+            """,
+            (
+                str(uuid.uuid4()),
+                key,
+                summary.get("batch_id"),
+                summary.get("batch_code"),
+                summary["status"],
+                summary["total_amount"],
+                summary["transaction_count"],
+                reference_number,
+                processed_at,
+                payouts_json,
+            ),
+        )
+
+    return get_ledger_record(key)
+
+
+def get_ledger_record(key: str) -> dict | None:
+    with sqlite3.connect(BANK_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM bank_batch_ledger WHERE ledger_key = ?", (key,)).fetchone()
+    return row_to_ledger(row) if row else None
+
+
+def row_to_ledger(row: sqlite3.Row) -> dict:
+    data = dict(row)
+    data["payouts"] = json.loads(data.pop("payouts_json") or "[]")
+    return data
 
 
 @app.post("/payout")
@@ -39,15 +210,19 @@ async def receive_payout(payload: dict):
         "ref_id": ref_id,
         "amount": payload.get("amount", 0),
         "recipient": payload.get("recipient", "Unknown"),
+        "metadata": payload.get("metadata") or {},
         "last_event": "Received payout request from Samanvaya",
+        "created_at": now_iso(),
     }
     return {"gateway_ref_id": ref_id, "status": "INITIATED"}
 
 
 @app.post("/reset")
 async def reset_bank():
-    """Clear the in-memory payout queue for a clean demo run."""
+    """Clear the active queue and persisted bank ledger for a clean demo run."""
     pending_payouts.clear()
+    with sqlite3.connect(BANK_DB_PATH) as conn:
+        conn.execute("DELETE FROM bank_batch_ledger")
     return {"ok": True, "cleared": True}
 
 
@@ -66,73 +241,95 @@ async def get_pending():
     return [v for v in pending_payouts.values() if v["status"] == "PENDING"]
 
 
+@app.get("/batches")
+async def get_batches():
+    """List active Mock Bank payout batches."""
+    return grouped_batches()
+
+
+@app.get("/pending-batches")
+async def get_pending_batches():
+    """List batches that still require approval or rejection."""
+    return grouped_batches(only_pending=True)
+
+
 @app.get("/all")
 async def get_all():
     """List all payouts (any status)."""
     return list(pending_payouts.values())
 
 
+@app.get("/ledger")
+async def get_bank_ledger():
+    """Return persisted processed batch history."""
+    with sqlite3.connect(BANK_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM bank_batch_ledger ORDER BY processed_at DESC").fetchall()
+    return [row_to_ledger(row) for row in rows]
+
+
+@app.get("/ledger/payments")
+async def get_bank_payment_ledger():
+    """Return processed bank records flattened to one row per payout."""
+    records = await get_bank_ledger()
+    rows = []
+    for record in records:
+        for payout in record["payouts"]:
+            metadata = payout.get("metadata") or {}
+            rows.append({
+                "batch_id": record["batch_id"],
+                "batch_code": record["batch_code"],
+                "bank_batch_status": record["status"],
+                "bank_reference_number": record["reference_number"],
+                "processed_at": record["processed_at"],
+                "gateway_ref_id": payout.get("ref_id"),
+                "claim_id": metadata.get("claim_id"),
+                "claim_code": metadata.get("claim_code") or payout.get("ref_id"),
+                "health_facility": metadata.get("health_facility") or payout.get("recipient"),
+                "amount": float(payout.get("amount") or 0),
+                "status": payout.get("status"),
+            })
+    return rows
+
+
 @app.post("/approve/{ref_id}")
 async def approve_payout(ref_id: str):
-    """Manually approve a payout — fires webhook to Samanvaya."""
-    payout = pending_payouts.get(ref_id)
-    if not payout:
-        return {"error": "Payout not found."}
-    if payout["status"] != "PENDING":
-        return {"error": f"Payout already {payout['status']}."}
-
-    payout["status"] = "SUCCESS"
-    payout["last_event"] = "Approved and webhook sent"
-
-    # Fire webhook
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(SAMANVAYA_WEBHOOK_URL, json={
-                "gateway_ref_id": ref_id,
-                "status": "SUCCESS",
-            }, timeout=5.0)
-    except Exception as e:
-        payout["webhook_error"] = str(e)
-
-    return {"ok": True, "status": "SUCCESS"}
+    """Manually approve one payout and fire a webhook to Samanvaya."""
+    return await process_payout(ref_id, "SUCCESS")
 
 
 @app.post("/settle-silent/{ref_id}")
 async def settle_silent(ref_id: str):
-    """Mark a payout successful without sending a webhook."""
-    payout = pending_payouts.get(ref_id)
-    if not payout:
-        return {"error": "Payout not found."}
-    if payout["status"] != "PENDING":
-        return {"error": f"Payout already {payout['status']}."}
-
-    payout["status"] = "SUCCESS"
-    payout["last_event"] = "Bank settled successfully; webhook intentionally dropped"
-    return {"ok": True, "status": "SUCCESS", "webhook_sent": False}
+    """Mark one payout successful without sending a webhook."""
+    return await process_payout(ref_id, "SUCCESS", webhook=False)
 
 
 @app.post("/reject/{ref_id}")
 async def reject_payout(ref_id: str):
-    """Manually reject a payout — fires webhook to Samanvaya."""
-    payout = pending_payouts.get(ref_id)
-    if not payout:
-        return {"error": "Payout not found."}
-    if payout["status"] != "PENDING":
-        return {"error": f"Payout already {payout['status']}."}
+    """Manually reject one payout and fire a webhook to Samanvaya."""
+    return await process_payout(ref_id, "FAILED")
 
-    payout["status"] = "FAILED"
-    payout["last_event"] = "Rejected and webhook sent"
 
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(SAMANVAYA_WEBHOOK_URL, json={
-                "gateway_ref_id": ref_id,
-                "status": "FAILED",
-            }, timeout=5.0)
-    except Exception as e:
-        payout["webhook_error"] = str(e)
+@app.post("/batches/{batch_id}/approve")
+async def approve_batch(batch_id: str):
+    """Approve every pending payout in a batch."""
+    items = [item for item in payouts_for_batch(batch_id) if item["status"] == "PENDING"]
+    if not items:
+        return {"error": "No pending payouts found for this batch."}
+    for item in items:
+        await process_payout(item["ref_id"], "SUCCESS")
+    return {"ok": True, "status": "SUCCESS", "batch": record_if_batch_complete(batch_id)}
 
-    return {"ok": True, "status": "FAILED"}
+
+@app.post("/batches/{batch_id}/reject")
+async def reject_batch(batch_id: str):
+    """Reject every pending payout in a batch."""
+    items = [item for item in payouts_for_batch(batch_id) if item["status"] == "PENDING"]
+    if not items:
+        return {"error": "No pending payouts found for this batch."}
+    for item in items:
+        await process_payout(item["ref_id"], "FAILED")
+    return {"ok": True, "status": "FAILED", "batch": record_if_batch_complete(batch_id)}
 
 
 @app.get("/ui", response_class=HTMLResponse)

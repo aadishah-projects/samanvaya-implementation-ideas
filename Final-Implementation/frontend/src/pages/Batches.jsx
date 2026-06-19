@@ -4,7 +4,6 @@ import api from '../api/client';
 export default function Batches() {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
-  const [transactions, setTransactions] = useState([]);
   const [message, setMessage] = useState('');
 
   const load = async () => {
@@ -23,12 +22,11 @@ export default function Batches() {
   }, []);
 
   const openBatch = async (batch) => {
-    setSelectedBatch(batch);
     try {
-      const res = await api.get(`/batches/${batch.id}/transactions`);
-      setTransactions(res.data);
+      const res = await api.get(`/batches/${batch.id}`);
+      setSelectedBatch(res.data);
     } catch (e) {
-      setMessage('Could not load transactions: ' + (e.response?.data?.detail || e.message));
+      setMessage('Could not load batch details: ' + (e.response?.data?.detail || e.message));
     }
   };
 
@@ -105,36 +103,65 @@ export default function Batches() {
       </section>
 
       {selectedBatch && (
-        <section className="mt-5 border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">
-              {selectedBatch.batch_code || selectedBatch.id} Transactions
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 text-left">Claim</th>
-                  <th className="px-3 py-2 text-left">Hospital</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-mono text-xs">{tx.claim_code}</td>
-                    <td className="px-3 py-2">{tx.health_facility}</td>
-                    <td className="px-3 py-2 text-right">{npr(tx.amount)}</td>
-                    <td className="px-3 py-2 text-center">{badge(tx.status)}</td>
+        <div className="fixed inset-0 z-50 bg-black/30" onClick={() => setSelectedBatch(null)}>
+          <aside
+            className="ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">{selectedBatch.batch_code || selectedBatch.id}</h2>
+                  <p className="mt-1 text-sm text-slate-500">{selectedBatch.health_facility || 'Multiple Facilities'}</p>
+                </div>
+                <button onClick={() => setSelectedBatch(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <Metric label="Status" value={selectedBatch.status} />
+                <Metric label="Claims" value={selectedBatch.claim_count} />
+                <Metric label="Total" value={npr(selectedBatch.total_amount)} />
+                <Metric label="Created" value={new Date(selectedBatch.created_at).toLocaleString()} />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Claim</th>
+                    <th className="px-3 py-2 text-left">Insuree</th>
+                    <th className="px-3 py-2 text-left">Hospital</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2 text-center">Status</th>
+                    <th className="px-3 py-2 text-left">Gateway Ref</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {selectedBatch.transactions.map((tx) => (
+                    <tr key={tx.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-mono text-xs">{tx.claim_code}</td>
+                      <td className="px-3 py-2">{tx.insuree_name || '-'}</td>
+                      <td className="px-3 py-2">{tx.health_facility}</td>
+                      <td className="px-3 py-2 text-right">{npr(tx.amount)}</td>
+                      <td className="px-3 py-2 text-center">{badge(tx.status)}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-500">{tx.gateway_ref_id || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </aside>
+        </div>
       )}
+    </div>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 p-3">
+      <div className="text-[11px] font-semibold uppercase text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
     </div>
   );
 }

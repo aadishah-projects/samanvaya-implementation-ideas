@@ -101,7 +101,6 @@ class BulkDisbursementService:
                 if amount > amount_limit:
                     flush_group()
                     over_limit_claims.append(claim.claim_code)
-                    created_batches.append(self.create_batch([claim.id]))
                     continue
 
                 if current_group and current_total + amount > amount_limit:
@@ -139,6 +138,13 @@ class BulkDisbursementService:
                 ref_id=str(tx.idempotency_key),
                 amount=tx.amount,
                 recipient=tx.claim.health_facility if tx.claim else "Unknown",
+                metadata={
+                    "batch_id": batch.id,
+                    "batch_code": batch.batch_code,
+                    "claim_id": tx.claim_id,
+                    "claim_code": tx.claim.claim_code if tx.claim else None,
+                    "health_facility": tx.claim.health_facility if tx.claim else None,
+                },
             )
 
             tx.raw_request_log = response.request_payload
@@ -171,6 +177,13 @@ class BulkDisbursementService:
             ref_id=str(tx.idempotency_key),
             amount=tx.amount,
             recipient=tx.claim.health_facility if tx.claim else "Unknown",
+            metadata={
+                "batch_id": tx.batch_id,
+                "batch_code": tx.batch.batch_code if tx.batch else None,
+                "claim_id": tx.claim_id,
+                "claim_code": tx.claim.claim_code if tx.claim else None,
+                "health_facility": tx.claim.health_facility if tx.claim else None,
+            },
         )
 
         tx.raw_request_log = response.request_payload

@@ -51,6 +51,10 @@ def sync_demo_schema():
             "health_facility": "VARCHAR",
         },
         "sosys_legacy_logs": {
+            "batch_id": "VARCHAR",
+            "batch_code": "VARCHAR",
+            "gateway_ref_id": "VARCHAR",
+            "source": "VARCHAR DEFAULT 'UPLOAD'",
             "issue_type": "VARCHAR",
         },
     }

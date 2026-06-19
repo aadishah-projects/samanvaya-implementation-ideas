@@ -10,6 +10,7 @@ from models import (
     PaymentTransaction,
     TransactionStatus,
 )
+from services.sosys_audit import reflect_completed_batch
 
 
 TERMINAL_STATUSES = {
@@ -42,7 +43,8 @@ def apply_gateway_status(
 
     _sync_claim_status(tx)
     db.commit()
-    update_batch_status(db, tx.batch_id)
+    batch = update_batch_status(db, tx.batch_id)
+    reflect_completed_batch(db, batch)
     db.refresh(tx)
     return tx
 
